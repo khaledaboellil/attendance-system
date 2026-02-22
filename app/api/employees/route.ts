@@ -26,7 +26,6 @@ export async function POST(req: NextRequest) {
         if (!name || !username || !password || !role)
             return NextResponse.json({ error: "املأ كل البيانات" }, { status: 400 })
 
-        // تحقق لو اليوزر موجود مسبقاً
         const { data: existing } = await supabase
             .from("employees")
             .select("*")
@@ -35,7 +34,6 @@ export async function POST(req: NextRequest) {
 
         if (existing) return NextResponse.json({ error: "المستخدم موجود مسبقاً" }, { status: 400 })
 
-        // IDs للأماكن الافتراضية التي تريد تعيينها للموظف الجديد
         const defaultLocations = [
             "a89a4bbf-83db-403b-b66d-4cb40250bd3d",
             "e2b17a94-a54e-4cb1-905d-9f13d2df3e20",
@@ -52,5 +50,44 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: "تم إضافة الموظف بنجاح" })
     } catch {
         return NextResponse.json({ error: "حدث خطأ أثناء إضافة الموظف" }, { status: 500 })
+    }
+}
+
+// تحديث الموظف
+export async function PUT(req: NextRequest) {
+    try {
+        const { id, name, username, role } = await req.json()
+        if (!id || !name || !username || !role)
+            return NextResponse.json({ error: "املأ كل البيانات" }, { status: 400 })
+
+        const { error } = await supabase
+            .from("employees")
+            .update({ name, username, role })
+            .eq("id", id)
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+        return NextResponse.json({ message: "تم تعديل الموظف بنجاح" })
+    } catch {
+        return NextResponse.json({ error: "حدث خطأ أثناء تعديل الموظف" }, { status: 500 })
+    }
+}
+
+// حذف الموظف
+export async function DELETE(req: NextRequest) {
+    try {
+        const { id } = await req.json()
+        if (!id) return NextResponse.json({ error: "الرقم التعريفي مطلوب" }, { status: 400 })
+
+        const { error } = await supabase
+            .from("employees")
+            .delete()
+            .eq("id", id)
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+        return NextResponse.json({ message: "تم حذف الموظف بنجاح" })
+    } catch {
+        return NextResponse.json({ error: "حدث خطأ أثناء حذف الموظف" }, { status: 500 })
     }
 }

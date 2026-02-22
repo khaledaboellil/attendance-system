@@ -81,6 +81,8 @@ export default function EmployeePage() {
     }
 
     const handleLogout = () => {
+        document.cookie = "username=; path=/; max-age=0"
+        document.cookie = "role=; path=/; max-age=0"
         localStorage.removeItem("username")
         localStorage.removeItem("role")
         localStorage.removeItem("name")
