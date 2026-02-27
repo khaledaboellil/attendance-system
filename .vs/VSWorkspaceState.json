@@ -2,11 +2,11 @@
   "ExpandedNodes": [
     "",
     "\\app",
-    "\\app\\admin",
     "\\app\\api",
-    "\\app\\api\\employees",
-    "\\app\\api\\reports\\absences"
+    "\\app\\api\\reports",
+    "\\app\\api\\reports\\absences",
+    "\\app\\employee"
   ],
-  "SelectedNode": "\\app\\api\\employees\\route.ts",
+  "SelectedNode": "\\app\\api\\reports\\absences\\route.ts",
   "PreviewInSolutionExplorer": false
 }

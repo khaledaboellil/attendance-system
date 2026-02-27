@@ -14,7 +14,16 @@ type AbsenceReport = {
     username: string
     missedDays: string[]
 }
-
+type AttendanceRecord = {
+    day: string
+    check_in: string | null
+    check_out: string | null
+    employees: {
+        name: string
+        username: string
+        role: string
+    }
+}
 export default function AdminPage() {
     const router = useRouter()
     const [employees, setEmployees] = useState<Employee[]>([])
@@ -25,14 +34,17 @@ export default function AdminPage() {
     const [from, setFrom] = useState("")
     const [to, setTo] = useState("")
     const [absences, setAbsences] = useState<AbsenceReport[]>([])
-
+    const [attendanceReport, setAttendanceReport] = useState<AttendanceRecord[]>([])
+    const [expandedUser, setExpandedUser] = useState<string | null>(null)
     const fetchEmployees = async () => {
         const res = await fetch("/api/employees")
         if (res.ok) setEmployees(await res.json())
     }
 
     useEffect(() => { fetchEmployees() }, [])
-
+    const goToAttendance = () => {
+        router.push("/employee")
+    }
     const addEmployee = async () => {
         if (!name || !username || !password) return alert("املأ كل البيانات")
         const res = await fetch("/api/employees", {
@@ -82,7 +94,54 @@ export default function AdminPage() {
             if (res.ok) setAbsences(await res.json())
         } catch (err) { console.error(err) }
     }
+    const calculateHours = (checkIn: string | null, checkOut: string | null) => {
+        if (!checkIn || !checkOut) return 0
 
+        const start = new Date(checkIn)
+        const end = new Date(checkOut)
+
+        return (end.getTime() - start.getTime()) / 1000 / 60 / 60
+    }
+    const groupedAttendance = attendanceReport.reduce((acc: any, record) => {
+        const username = record.employees.username
+
+        if (!acc[username]) {
+            acc[username] = {
+                name: record.employees.name,
+                username,
+                records: [],
+                totalHours: 0
+            }
+        }
+
+        const hours = calculateHours(record.check_in, record.check_out)
+
+        acc[username].records.push({
+            day: record.day,
+            check_in: record.check_in,
+            check_out: record.check_out,
+            hours
+        })
+
+        acc[username].totalHours += hours
+
+        return acc
+    }, {})
+    const fetchAttendanceReport = async () => {
+        if (!from || !to) return alert("حدد من وإلى")
+
+        try {
+            const res = await fetch(
+                `/api/reports/absences?type=attendance&from=${from}&to=${to}`
+            )
+
+            if (res.ok) {
+                setAttendanceReport(await res.json())
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
     const handleLogout = () => {
         document.cookie = "username=; path=/; max-age=0"
         document.cookie = "role=; path=/; max-age=0"
@@ -96,6 +155,7 @@ export default function AdminPage() {
             <div style={styles.container}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h2 style={styles.title}>صفحة الأدمن</h2>
+                    <button onClick={goToAttendance} style={styles.button}>الانتقال لتسجيل الحضور والانصراف</button>
                     <button onClick={handleLogout} style={styles.logoutButton}>تسجيل خروج</button>
                 </div>
 
@@ -187,6 +247,7 @@ export default function AdminPage() {
                         <label> إلى: </label>
                         <input type="date" value={to} onChange={e => setTo(e.target.value)} style={styles.dateInput} />
                         <button onClick={fetchAbsences} style={{ ...styles.button, marginLeft: 10 }}>عرض الغياب</button>
+                        <button onClick={fetchAttendanceReport} style={{ ...styles.button, marginLeft: 10 }}>عرض الحضور والانصراف </button>
                     </div>
                     {absences.length === 0 && <p>لا توجد غيابات</p>}
                     {absences.map(rep => (
@@ -196,7 +257,52 @@ export default function AdminPage() {
                         </div>
                     ))}
                 </div>
+                <div style={styles.section}>
+                    <h3>تقرير الحضور والانصراف</h3>
 
+                    {Object.keys(groupedAttendance).length === 0 && <p>لا توجد بيانات</p>}
+
+                    {Object.values(groupedAttendance).map((user: any) => (
+                        <div key={user.username} style={styles.absenceBox}>
+
+                            {/* العنوان */}
+                            <div
+                                style={{ cursor: "pointer", fontWeight: "bold", fontSize: 18 }}
+                                onClick={() =>
+                                    setExpandedUser(
+                                        expandedUser === user.username ? null : user.username
+                                    )
+                                }
+                            >
+                                {user.name} ({user.username})
+                                <span style={{ marginRight: 10, color: "#1976d2" }}>
+                                    — إجمالي الساعات: {user.totalHours.toFixed(2)} ساعة
+                                </span>
+                            </div>
+
+                            {/* التفاصيل */}
+                            {expandedUser === user.username && (
+                                <div style={{ marginTop: 10 }}>
+                                    {user.records.map((rec: any, i: number) => (
+                                        <div key={i} style={{ marginBottom: 8 }}>
+                                            <p>📅 اليوم: {rec.day}</p>
+                                            <p>
+                                                🟢 حضور: {rec.check_in ? new Date(rec.check_in).toLocaleTimeString() : "-"}
+                                            </p>
+                                            <p>
+                                                🔴 انصراف: {rec.check_out ? new Date(rec.check_out).toLocaleTimeString() : "-"}
+                                            </p>
+                                            <p>
+                                                ⏱ عدد الساعات: {rec.hours.toFixed(2)} ساعة
+                                            </p>
+                                            <hr />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
                 <div style={styles.footer}>
                     &copy; 2026 Khaled Aboellil. جميع الحقوق محفوظة.
                 </div>

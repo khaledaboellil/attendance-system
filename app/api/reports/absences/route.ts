@@ -29,48 +29,85 @@ export async function GET(req: NextRequest) {
     try {
         const from = req.nextUrl.searchParams.get("from")
         const to = req.nextUrl.searchParams.get("to")
+        const type = req.nextUrl.searchParams.get("type") // 👈 جديد
 
         if (!from || !to)
             return NextResponse.json({ error: "يجب تحديد from و to" }, { status: 400 })
 
-        const workingDays = getWorkingDays(from, to)
+        ////////////////////////////////////////////////////////
+        // 🔹 1️⃣ تقرير الغياب (القديم)
+        ////////////////////////////////////////////////////////
+        if (!type || type === "absences") {
 
-        // كل الموظفين
-        const { data: employees } = await supabase
-            .from("employees")
-            .select("id, name, username")
-            .eq("role", "employee") // جلب الموظفين فقط
+            const workingDays = getWorkingDays(from, to)
 
-        if (!employees?.length)
-            return NextResponse.json([])
+            const { data: employees } = await supabase
+                .from("employees")
+                .select("id, name, username")
+                //.eq("role", "employee") // 👈 يستبعد الأدمن
 
-        // الحضور فى الفترة
-        const { data: attendance } = await supabase
-            .from("attendance")
-            .select("employee_id, day")
-            .gte("day", from)
-            .lte("day", to)
+            if (!employees?.length)
+                return NextResponse.json([])
 
-        const absences: any[] = []
+            const { data: attendance } = await supabase
+                .from("attendance")
+                .select("employee_id, day")
+                .gte("day", from)
+                .lte("day", to)
 
-        for (const emp of employees) {
-            const empDays = attendance
-                ?.filter(a => a.employee_id === emp.id)
-                .map(a => a.day) || []
+            const absences: any[] = []
 
-            const missedDays = workingDays.filter(d => !empDays.includes(d))
+            for (const emp of employees) {
+                const empDays =
+                    attendance
+                        ?.filter(a => a.employee_id === emp.id)
+                        .map(a => a.day) || []
 
-            if (missedDays.length > 0) {
-                absences.push({
-                    employee: emp.name,
-                    username: emp.username,
-                    missedDays
-                })
+                const missedDays = workingDays.filter(d => !empDays.includes(d))
+
+                if (missedDays.length > 0) {
+                    absences.push({
+                        employee: emp.name,
+                        username: emp.username,
+                        missedDays
+                    })
+                }
             }
+
+            return NextResponse.json(absences)
         }
 
-        return NextResponse.json(absences)
+        ////////////////////////////////////////////////////////
+        // 🔹 2️⃣ تقرير الحضور والانصراف الجديد
+        ////////////////////////////////////////////////////////
+        if (type === "attendance") {
+
+            const { data } = await supabase
+                .from("attendance")
+                .select(`
+                    day,
+                    check_in,
+                    check_out,
+                    location,
+                    employees (
+                        name,
+                        username,
+                        role
+                    )
+                `)
+                .gte("day", from)
+                .lte("day", to)
+                .order("day", { ascending: false })
+
+            return NextResponse.json(data || [])
+        }
+
+        return NextResponse.json({ error: "type غير صحيح" }, { status: 400 })
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء إنشاء التقرير" }, { status: 500 })
+        return NextResponse.json(
+            { error: "حدث خطأ أثناء إنشاء التقرير" },
+            { status: 500 }
+        )
     }
 }
