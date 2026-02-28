@@ -13,7 +13,12 @@ export default function EmployeePage() {
 
     const [from, setFrom] = useState("")
     const [to, setTo] = useState("")
-
+    // للإجازات
+    const [leaveFrom, setLeaveFrom] = useState("")
+    const [leaveTo, setLeaveTo] = useState("")
+    const [reason, setReason] = useState("")
+    const [leaveType, setLeaveType] = useState("annual")
+    const [leaveRequests, setLeaveRequests] = useState<any[]>([])
     useEffect(() => {
         const storedUsername = localStorage.getItem("username")
         if (!storedUsername) {
@@ -30,7 +35,7 @@ export default function EmployeePage() {
         }
         setEmployeeName(storedName)
         fetchTodayAttendance(storedUsername)
-
+        fetchLeaveRequests(storedUsername)
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 pos => { setCurrentPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLoadingPos(false) },
@@ -88,6 +93,71 @@ export default function EmployeePage() {
         localStorage.removeItem("name")
         router.push("/")
     }
+    // ======== إرسال طلب إجازة ========
+    const handleLeaveRequest = async () => {
+        if (!leaveFrom || !leaveTo ) {
+            alert("يرجى اختيار المده ")
+            return
+        }
+        try {
+            const res = await fetch("/api/leave-requests", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employee_id: employeeUsername,
+                    start_date: leaveFrom,
+                    end_date: leaveTo,
+                    reason,
+                    type: leaveType
+                })
+            })
+            const data = await res.json()
+            if (res.ok) {
+                alert("تم إرسال الطلب بنجاح")
+                setReason("")
+                setLeaveFrom("")
+                setLeaveTo("")
+                setLeaveType("annual")
+                fetchLeaveRequests(employeeUsername)
+            } else {
+                alert(data.error || "حدث خطأ")
+            }
+        } catch (err) { console.error(err); alert("حدث خطأ أثناء الإرسال") }
+    }
+
+    // ======== جلب طلبات الإجازة ========
+    const fetchLeaveRequests = async (username: string) => {
+        try {
+            const res = await fetch(`/api/leave-requests?userId=${username}`)
+            if (res.ok) setLeaveRequests(await res.json())
+        } catch (err) { console.error(err) }
+    }
+
+
+    const handleDeleteLeave = async (leaveId: string) => {
+        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return;
+
+        try {
+            const res = await fetch("/api/leave-requests", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: leaveId.trim() })
+            });
+
+            if (res.ok) {
+                alert("تم حذف الطلب بنجاح");
+                // تحديث قائمة الطلبات بعد الحذف
+                fetchLeaveRequests(employeeUsername);
+            } else {
+                const data = await res.json();
+                alert(data.error || "حدث خطأ أثناء الحذف");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("حدث خطأ أثناء الحذف");
+        }
+    };
+
 
     return (
         <div style={styles.page}>
@@ -174,6 +244,78 @@ export default function EmployeePage() {
                         </div>
                     )}
                 </div>
+
+                {/* ======== طلب إجازة ======== */}
+                <div style={styles.section}>
+                    <h3>طلب إجازة</h3>
+                    <div style={{ marginBottom: 10 }}>
+                        <label>من: </label>
+                        <input type="date" value={leaveFrom} onChange={e => setLeaveFrom(e.target.value)} style={styles.dateInput} />
+                        <label> إلى: </label>
+                        <input type="date" value={leaveTo} onChange={e => setLeaveTo(e.target.value)} style={styles.dateInput} />
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                        <label>نوع الإجازة: </label>
+                        <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={{ ...styles.dateInput, width: '50%' }}>
+                            <option value="annual">إجازة سنوية</option>
+                            <option value="ad_hoc">إجازة عارضة</option>
+                            <option value="sick">إجازة مرضية</option>
+                            <option value="balance">إجازة من الرصيد</option>
+                        </select>
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                        <label>السبب: </label>
+                        <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="اكتب سبب الإجازة" style={{ ...styles.dateInput, width: '60%' }} />
+                    </div>
+                    <button onClick={handleLeaveRequest} style={styles.button}>إرسال طلب الإجازة</button>
+
+                    {/* جدول الطلبات */}
+                    <div style={{ marginTop: 20, maxHeight: 200, overflowY: 'auto', border: '1px solid #ccc', borderRadius: 10 }}>
+                        <h4>طلباتي</h4>
+                        {leaveRequests.length === 0 ? (
+                            <p style={{ padding: 10, textAlign: 'center' }}>لا يوجد طلبات</p>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f0f0f0' }}>
+                                    <tr>
+                                        <th style={styles.tableHeader}>من</th>
+                                        <th style={styles.tableHeader}>إلى</th>
+                                        <th style={styles.tableHeader}>السبب</th>
+                                        <th style={styles.tableHeader}>النوع</th>
+                                        <th style={styles.tableHeader}>الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {leaveRequests.map(lr => (
+                                        <tr key={lr.id}>
+                                            <td style={styles.tableCell}>{lr.start_date}</td>
+                                            <td style={styles.tableCell}>{lr.end_date}</td>
+                                            <td style={styles.tableCell}>{lr.reason}</td>
+                                            <td style={styles.tableCell}>
+                                                {lr.type === "annual" ? "إجازة سنوية" :
+                                                    lr.type === "ad_hoc" ? "إجازة عارضة" :
+                                                        lr.type === "sick" ? "إجازة مرضية" :
+                                                            lr.type === "balance" ? "إجازة من الرصيد" : "-"}
+                                            </td>
+                                            <td style={styles.tableCell}>{lr.status}</td>
+                                            <td style={styles.tableCell}>
+                                                {lr.status === "pending_manager" && (
+                                                    <button
+                                                        style={{ ...styles.button, backgroundColor: "#d32f2f" }}
+                                                        onClick={() => handleDeleteLeave(lr.id)}
+                                                    >
+                                                        حذف
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+
 
                 <div style={styles.footer}>
                     &copy; 2026 Khaled Aboellil. جميع الحقوق محفوظة.

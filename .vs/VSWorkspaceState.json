@@ -3,10 +3,9 @@
     "",
     "\\app",
     "\\app\\api",
-    "\\app\\api\\reports",
-    "\\app\\api\\reports\\absences",
-    "\\app\\employee"
+    "\\app\\api\\leave-requests",
+    "\\app\\api\\reports\\absences"
   ],
-  "SelectedNode": "\\app\\api\\reports\\absences\\route.ts",
+  "SelectedNode": "\\app\\api\\leave-requests\\route.ts",
   "PreviewInSolutionExplorer": false
 }
