@@ -11,19 +11,92 @@ export default function Login() {
     const [rememberMe, setRememberMe] = useState(false)
     const [error, setError] = useState("")
     const [loading, setLoading] = useState(false)
+    const [checking, setChecking] = useState(true)
 
-    // تحميل البيانات المحفوظة عند فتح الصفحة
+    // ✅ التحقق من وجود مستخدم متذكر عند تحميل الصفحة
     useEffect(() => {
-        const savedUsername = localStorage.getItem("remembered_username")
-        const savedPassword = localStorage.getItem("remembered_password")
+        const checkRememberedUser = async () => {
+            const rememberedUsername = localStorage.getItem("remembered_username")
+            const rememberedPassword = localStorage.getItem("remembered_password")
+            const rememberedRole = localStorage.getItem("role") // لو مخزن قبل كده
 
-        if (savedUsername && savedPassword) {
-            setUsername(savedUsername)
-            setPassword(savedPassword)
-            setRememberMe(true)
+            console.log("🔍 فحص المستخدم المتذكر:", { rememberedUsername, rememberedRole })
+
+            // لو في بيانات متذكرة، نجرب نسجل دخول تلقائي
+            if (rememberedUsername && rememberedPassword) {
+                setUsername(rememberedUsername)
+                setPassword(rememberedPassword)
+                setRememberMe(true)
+
+                // جرب تسجيل الدخول تلقائياً
+                await autoLogin(rememberedUsername, rememberedPassword)
+            } else if (rememberedRole) {
+                // لو في role مخزن لكن مش البيانات كاملة، نوجه حسب الدور
+                const role = localStorage.getItem("role")
+                if (role === "admin") router.push("/admin")
+                else if (role === "manager") router.push("/manager")
+                else if (role === "employee") router.push("/employee")
+            }
+
+            setChecking(false)
         }
+
+        checkRememberedUser()
     }, [])
 
+    // ✅ دالة تسجيل الدخول التلقائي
+    const autoLogin = async (user: string, pass: string) => {
+        setLoading(true)
+
+        try {
+            const { data, error: fetchError } = await supabase
+                .from("employees")
+                .select("*")
+                .eq("username", user)
+                .eq("password", pass)
+
+            if (!fetchError && data && data.length === 1) {
+                const userData = data[0]
+                await completeLogin(userData, true)
+            }
+        } catch (err) {
+            console.error("❌ خطأ في تسجيل الدخول التلقائي:", err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // ✅ دالة استكمال تسجيل الدخول
+    const completeLogin = async (user: any, isAuto = false) => {
+        console.log("✅ تم العثور على المستخدم:", user.role)
+
+        // حفظ في localStorage
+        localStorage.setItem("username", user.username)
+        localStorage.setItem("role", user.role)
+        localStorage.setItem("name", user.name)
+        localStorage.setItem("employee_id", user.id)
+
+        // حفظ في cookies (للميدل وار)
+        const maxAge = rememberMe ? 2592000 : 86400 // 30 يوم أو 1 يوم
+        document.cookie = `role=${user.role}; path=/; max-age=${maxAge}`
+        document.cookie = `employee_id=${user.id}; path=/; max-age=${maxAge}`
+
+        // حفظ بيانات التذكر
+        if (rememberMe) {
+            localStorage.setItem("remembered_username", user.username)
+            localStorage.setItem("remembered_password", password)
+            document.cookie = `remembered=true; path=/; max-age=${maxAge}`
+        }
+
+        console.log("💾 تم الحفظ، جاري التوجيه...")
+
+        // التوجيه
+        if (user.role === "admin") router.push("/admin")
+        else if (user.role === "manager") router.push("/manager")
+        else router.push("/employee")
+    }
+
+    // ✅ دالة تسجيل الدخول اليدوي
     const handleLogin = async () => {
         if (!username || !password) {
             setError("املأ كل البيانات")
@@ -33,38 +106,49 @@ export default function Login() {
         setLoading(true)
         setError("")
 
-        const { data, error: fetchError } = await supabase
-            .from("employees")
-            .select("*")
-            .eq("username", username)
-            .eq("password", password)
-            .single()
+        try {
+            const { data, error: fetchError } = await supabase
+                .from("employees")
+                .select("*")
+                .eq("username", username)
+                .eq("password", password)
 
-        if (fetchError || !data) {
-            setError("بيانات الدخول غير صحيحة")
+            if (fetchError) {
+                setError("خطأ في الاتصال بقاعدة البيانات")
+                setLoading(false)
+                return
+            }
+
+            if (!data || data.length === 0) {
+                setError("بيانات الدخول غير صحيحة")
+                setLoading(false)
+                return
+            }
+
+            if (data.length > 1) {
+                setError("خطأ في بيانات المستخدم")
+                setLoading(false)
+                return
+            }
+
+            await completeLogin(data[0], false)
+
+        } catch (err) {
+            console.error("❌ خطأ:", err)
+            setError("حدث خطأ غير متوقع")
             setLoading(false)
-            return
         }
+    }
 
-        // حفظ بيانات الجلسة الحالية
-        localStorage.setItem("username", data.username)
-        localStorage.setItem("role", data.role)
-        localStorage.setItem("name", data.name)
-        localStorage.setItem("employee_id", data.id)
-
-        // حفظ بيانات "تذكرني" إذا تم الاختيار
-        if (rememberMe) {
-            localStorage.setItem("remembered_username", username)
-            localStorage.setItem("remembered_password", password)
-        } else {
-            // مسح البيانات المحفوظة إذا لم يتم اختيار تذكرني
-            localStorage.removeItem("remembered_username")
-            localStorage.removeItem("remembered_password")
-        }
-
-        if (data.role === "admin") router.push("/admin")
-        else if (data.role === "manager") router.push("/manager")
-        else router.push("/employee")
+    if (checking) {
+        return (
+            <div className="login-page">
+                <div className="login-box">
+                    <h2>تسجيل الدخول</h2>
+                    <p style={{ textAlign: "center" }}>جاري التحقق...</p>
+                </div>
+            </div>
+        )
     }
 
     return (
@@ -88,15 +172,14 @@ export default function Login() {
                     disabled={loading}
                 />
 
-                <div style={styles.rememberContainer}>
-                    <label style={styles.rememberLabel}>
+                <div className="remember-container">
+                    <label className="remember-label">
                         <input
                             type="checkbox"
                             checked={rememberMe}
                             onChange={e => setRememberMe(e.target.checked)}
-                            style={styles.checkbox}
                         />
-                        <span style={styles.rememberText}>تذكرني</span>
+                        <span>تذكرني</span>
                     </label>
                 </div>
 
@@ -112,30 +195,4 @@ export default function Login() {
             </div>
         </div>
     )
-}
-
-// أنماط إضافية للتذكرني
-const styles = {
-    rememberContainer: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        margin: '10px 0',
-        direction: 'rtl' as const
-    },
-    rememberLabel: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        cursor: 'pointer'
-    },
-    checkbox: {
-        width: '18px',
-        height: '18px',
-        cursor: 'pointer'
-    },
-    rememberText: {
-        fontSize: '14px',
-        color: '#333'
-    }
 }

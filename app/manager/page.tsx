@@ -348,10 +348,13 @@ export default function ManagerPage() {
     // دالة تسجيل الخروج
     // =============================================
     const handleLogout = () => {
-        localStorage.removeItem("username")
-        localStorage.removeItem("role")
-        localStorage.removeItem("name")
-        localStorage.removeItem("employee_id")
+        // مسح localStorage
+        localStorage.clear()
+
+        // مسح cookies
+        document.cookie = "role=; path=/; max-age=0"
+        document.cookie = "employee_id=; path=/; max-age=0"
+        document.cookie = "remembered=; path=/; max-age=0"
         router.push("/")
     }
 

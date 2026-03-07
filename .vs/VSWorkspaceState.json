@@ -2,10 +2,8 @@
   "ExpandedNodes": [
     "",
     "\\app",
-    "\\app\\api\\departments\\managers",
-    "\\app\\api\\reports\\absences",
-    "\\app\\employee"
+    "\\app\\manager"
   ],
-  "SelectedNode": "\\app\\employee\\page.tsx",
+  "SelectedNode": "\\app\\manager\\page.tsx",
   "PreviewInSolutionExplorer": false
 }

@@ -1,20 +1,34 @@
-﻿import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+﻿import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-    const role = request.cookies.get("role")?.value
+    const path = request.nextUrl.pathname
+    const role = request.cookies.get('role')?.value || ''
+    const remembered = request.cookies.get('remembered')?.value || ''
 
-    // لو حد حاول يدخل صفحة الأدمن
-    if (request.nextUrl.pathname.startsWith("/admin")) {
-        if (role !== "admin") {
-            return NextResponse.redirect(new URL("/", request.url))
-        }
+    console.log(`🔍 مسار: ${path}, الدور: ${role}, متذكر: ${remembered}`)
+
+    // لو مش مسجل دخول ومفيش تذكر، نسمح فقط بالصفحة الرئيسية
+    if (!role && !remembered && path !== '/') {
+        return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    // المسارات المحمية
+    if (path.startsWith('/admin') && role !== 'admin') {
+        return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    if (path.startsWith('/manager') && role !== 'manager') {
+        return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    if (path.startsWith('/employee') && !['employee'].includes(role)) {
+        return NextResponse.redirect(new URL('/', request.url))
     }
 
     return NextResponse.next()
 }
 
-// تحديد الصفحات اللي يتطبق عليها الحماية
 export const config = {
-    matcher: ["/admin/:path*"]
+    matcher: ['/admin/:path*', '/manager/:path*', '/employee/:path*'],
 }
