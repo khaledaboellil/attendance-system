@@ -11,9 +11,9 @@ export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url)
         const manager_id = searchParams.get("manager_id")
-
+        
         console.log("جاري جلب الأقسام...")
-
+        
         let query = supabase
             .from("departments")
             .select(`
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
                 .from("manager_departments")
                 .select("department_id")
                 .eq("manager_id", manager_id)
-
+            
             const deptIds = managedDepts?.map(d => d.department_id) || []
             if (deptIds.length > 0) {
                 query = query.in("id", deptIds)
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
             console.error("خطأ في جلب الأقسام:", error)
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
-
+        
         // جلب عدد الموظفين لكل قسم
         const departmentsWithCount = await Promise.all(
             (data || []).map(async (dept) => {
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
                     .from("employees")
                     .select("*", { count: "exact", head: true })
                     .eq("department_id", dept.id)
-
+                
                 // جلب المدراء المسؤولين عن القسم
                 const { data: managers } = await supabase
                     .from("manager_departments")
@@ -60,20 +60,27 @@ export async function GET(req: NextRequest) {
                         employees:manager_id (name, username)
                     `)
                     .eq("department_id", dept.id)
-
+                
+                // تحويل بيانات المدراء مع التأكد من النوع
+                const managersList = managers?.map(m => {
+                    // التأكد من أن employees هو كائن وليس مصفوفة
+                    const empData = Array.isArray(m.employees) ? m.employees[0] : m.employees
+                    return {
+                        id: m.manager_id,
+                        name: empData?.name || "",
+                        username: empData?.username || ""
+                    }
+                }) || []
+                
                 return {
                     id: dept.id,
                     name: dept.name,
                     employees_count: count || 0,
-                    managers: managers?.map(m => ({
-                        id: m.manager_id,
-                        name: m.employees?.name,
-                        username: m.employees?.username
-                    })) || []
+                    managers: managersList
                 }
             })
         )
-
+        
         console.log("تم جلب الأقسام بنجاح:", departmentsWithCount.length)
         return NextResponse.json(departmentsWithCount || [])
     } catch (error) {
@@ -86,7 +93,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const { name } = await req.json()
-
+        
         if (!name) {
             return NextResponse.json({ error: "اسم القسم مطلوب" }, { status: 400 })
         }
@@ -118,8 +125,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
-        return NextResponse.json({
-            message: "تم إضافة القسم بنجاح",
+        return NextResponse.json({ 
+            message: "تم إضافة القسم بنجاح", 
             department: {
                 id: data.id,
                 name: data.name,
@@ -137,7 +144,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
     try {
         const { id, name } = await req.json()
-
+        
         if (!id || !name) {
             return NextResponse.json({ error: "معرف القسم واسمه مطلوب" }, { status: 400 })
         }
@@ -171,9 +178,9 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
-        return NextResponse.json({
-            message: "تم تعديل القسم بنجاح",
-            department: data
+        return NextResponse.json({ 
+            message: "تم تعديل القسم بنجاح", 
+            department: data 
         })
     } catch (error) {
         console.error("خطأ غير متوقع:", error)
@@ -204,8 +211,8 @@ export async function DELETE(req: NextRequest) {
         }
 
         if (employees && employees.length > 0) {
-            return NextResponse.json({
-                error: "لا يمكن حذف القسم لأنه يوجد موظفين تابعين له"
+            return NextResponse.json({ 
+                error: "لا يمكن حذف القسم لأنه يوجد موظفين تابعين له" 
             }, { status: 400 })
         }
 
