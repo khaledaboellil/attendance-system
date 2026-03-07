@@ -2,34 +2,36 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-
 import "./login.css"
 
-export default function LoginPage() {
+export default function Login() {
     const router = useRouter()
     const [username, setUsername] = useState("")
     const [password, setPassword] = useState("")
-    const [remember, setRemember] = useState(false)
+    const [rememberMe, setRememberMe] = useState(false)
     const [error, setError] = useState("")
-    const [checked, setChecked] = useState(false)
+    const [loading, setLoading] = useState(false)
 
+    // تحميل البيانات المحفوظة عند فتح الصفحة
     useEffect(() => {
-        const lastUser = localStorage.getItem("username")
-        const role = localStorage.getItem("role")
+        const savedUsername = localStorage.getItem("remembered_username")
+        const savedPassword = localStorage.getItem("remembered_password")
 
-        if (lastUser && role) {
-            if (role === "admin") router.replace("/admin")
-            else router.replace("/employee")
+        if (savedUsername && savedPassword) {
+            setUsername(savedUsername)
+            setPassword(savedPassword)
+            setRememberMe(true)
         }
-
-        setChecked(true)
-    }, [router])
+    }, [])
 
     const handleLogin = async () => {
         if (!username || !password) {
             setError("املأ كل البيانات")
             return
         }
+
+        setLoading(true)
+        setError("")
 
         const { data, error: fetchError } = await supabase
             .from("employees")
@@ -40,65 +42,100 @@ export default function LoginPage() {
 
         if (fetchError || !data) {
             setError("بيانات الدخول غير صحيحة")
+            setLoading(false)
             return
         }
 
+        // حفظ بيانات الجلسة الحالية
         localStorage.setItem("username", data.username)
         localStorage.setItem("role", data.role)
         localStorage.setItem("name", data.name)
+        localStorage.setItem("employee_id", data.id)
 
-        if (remember) {
-            document.cookie = `username=${data.username}; path=/; max-age=${60 * 60 * 24 * 30}`
-            document.cookie = `role=${data.role}; path=/; max-age=${60 * 60 * 24 * 30}`
+        // حفظ بيانات "تذكرني" إذا تم الاختيار
+        if (rememberMe) {
+            localStorage.setItem("remembered_username", username)
+            localStorage.setItem("remembered_password", password)
         } else {
-            document.cookie = `username=${data.username}; path=/`
-            document.cookie = `role=${data.role}; path=/`
+            // مسح البيانات المحفوظة إذا لم يتم اختيار تذكرني
+            localStorage.removeItem("remembered_username")
+            localStorage.removeItem("remembered_password")
         }
 
         if (data.role === "admin") router.push("/admin")
+        else if (data.role === "manager") router.push("/manager")
         else router.push("/employee")
     }
 
-    if (!checked) return null
-
     return (
         <div className="login-page">
-            
-
             <div className="login-box">
                 <h2>تسجيل الدخول</h2>
-
-                {error && <p className="error">{error}</p>}
 
                 <input
                     type="text"
                     placeholder="اسم المستخدم"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={e => setUsername(e.target.value)}
+                    disabled={loading}
                 />
 
                 <input
                     type="password"
                     placeholder="كلمة المرور"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={e => setPassword(e.target.value)}
+                    disabled={loading}
                 />
 
-                <label>
-                    <input
-                        type="checkbox"
-                        checked={remember}
-                        onChange={(e) => setRemember(e.target.checked)}
-                    />
-                    تذكرني
-                </label>
+                <div style={styles.rememberContainer}>
+                    <label style={styles.rememberLabel}>
+                        <input
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={e => setRememberMe(e.target.checked)}
+                            style={styles.checkbox}
+                        />
+                        <span style={styles.rememberText}>تذكرني</span>
+                    </label>
+                </div>
 
-                <button onClick={handleLogin}>دخول</button>
+                <button onClick={handleLogin} disabled={loading}>
+                    {loading ? "جاري تسجيل الدخول..." : "دخول"}
+                </button>
+
+                {error && <p className="error">{error}</p>}
 
                 <div className="footer">
-                    &copy; Khaled Aboellil 2026
+                    &copy; 2026 Khaled Aboellil. جميع الحقوق محفوظة.
                 </div>
             </div>
         </div>
     )
+}
+
+// أنماط إضافية للتذكرني
+const styles = {
+    rememberContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        margin: '10px 0',
+        direction: 'rtl' as const
+    },
+    rememberLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        cursor: 'pointer'
+    },
+    checkbox: {
+        width: '18px',
+        height: '18px',
+        cursor: 'pointer'
+    },
+    rememberText: {
+        fontSize: '14px',
+        color: '#333'
+    }
 }
