@@ -979,59 +979,10 @@ export default function AdminPage() {
                                 <span style={styles.statValue}>{departments.length}</span>
                                 <span style={styles.statLabel}>الأقسام</span>
                             </div>
-                            <div style={styles.statCard}>
-                                <span style={styles.statValue}>
-                                    {allRequests.filter(r => r.status === "قيد الانتظار" && !(r.hr_approved && r.manager_approved)).length}
-                                </span>
-                                <span style={styles.statLabel}>طلبات pending</span>
-                            </div>
-                            <div style={styles.statCard}>
-                                <span style={styles.statValue}>
-                                    {allRequests.filter(r => r.hr_approved && r.manager_approved).length}
-                                </span>
-                                <span style={styles.statLabel}>طلبات معتمدة</span>
-                            </div>
+                            
                         </div>
 
-                        <h4 style={styles.subTitle}>آخر الطلبات</h4>
-                        <div style={styles.tableContainer}>
-                            <table style={styles.table}>
-                                <thead>
-                                    <tr>
-                                        <th style={styles.tableHeader}>الموظف</th>
-                                        <th style={styles.tableHeader}>النوع</th>
-                                        <th style={styles.tableHeader}>التفاصيل</th>
-                                        <th style={styles.tableHeader}>الحالة</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {allRequests.slice(0, 5).map(req => {
-                                        const status = getApprovalStatus(req)
-                                        return (
-                                            <tr key={req.id}>
-                                                <td style={styles.tableCell}>{req.employees?.name}</td>
-                                                <td style={styles.tableCell}>
-                                                    <span style={{ ...styles.typeBadge, backgroundColor: getRequestTypeColor(req.requestType) }}>
-                                                        {req.requestTypeText}
-                                                    </span>
-                                                </td>
-                                                <td style={styles.tableCell}>
-                                                    {req.requestType === "leave" && `${req.leave_type} - من ${req.start_date} إلى ${req.end_date}`}
-                                                    {req.requestType === "overtime" && `${req.date} - ${req.hours} ساعة`}
-                                                    {req.requestType === "permission" && `${req.date} - ${req.permission_type}`}
-                                                    {req.requestType === "correction" && `${req.date}`}
-                                                </td>
-                                                <td style={styles.tableCell}>
-                                                    <span style={{ ...styles.statusBadge, backgroundColor: status.color }}>
-                                                        {status.text}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                        
                     </div>
                 )}
 
