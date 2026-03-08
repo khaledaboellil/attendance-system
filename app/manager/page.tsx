@@ -35,18 +35,21 @@ export default function ManagerPage() {
     const [managerName, setManagerName] = useState("")
     const [managerUsername, setManagerUsername] = useState("")
     const [managerId, setManagerId] = useState("")
+    const [hireDate, setHireDate] = useState("")
+    const [jobTitle, setJobTitle] = useState("")
     const [managedDepts, setManagedDepts] = useState<number[]>([])
     const [managedDeptsNames, setManagedDeptsNames] = useState<string>("")
 
     // ==================== التبويبات ====================
-    const [activeTab, setActiveTab] = useState<"requests" | "attendance" | "myRequests">("requests")
+    const [activeTab, setActiveTab] = useState<"requests" | "attendance" | "myRequests" | "settings">("requests")
 
-    // ==================== بيانات الطلبات (للموافقة) ====================
-    const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
+    // ==================== جميع الطلبات (للموافقة) ====================
+    const [allRequests, setAllRequests] = useState<any[]>([])
     const [selectedDepartment, setSelectedDepartment] = useState<string>("all")
     const [departments, setDepartments] = useState<Department[]>([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending")
+    const [requestsType, setRequestsType] = useState<"all" | "leave" | "overtime" | "permission" | "correction">("all")
 
     // ==================== طلبات المدير الشخصية ====================
     const [myLeaveRequests, setMyLeaveRequests] = useState<LeaveRequest[]>([])
@@ -55,6 +58,17 @@ export default function ManagerPage() {
     const [myLeaveStart, setMyLeaveStart] = useState("")
     const [myLeaveEnd, setMyLeaveEnd] = useState("")
     const [myLeaveReason, setMyLeaveReason] = useState("")
+    const [myLeaveBalance, setMyLeaveBalance] = useState({
+        total: 0,
+        used: 0,
+        remaining: 0,
+        emergency_total: 7,
+        emergency_used: 0,
+        emergency_remaining: 7,
+        yearsOfService: 0,
+        hire_date: "",
+        message: ""
+    })
 
     // ==================== الحضور (للمدير نفسه) ====================
     const [todayAttendance, setTodayAttendance] = useState<any>(null)
@@ -64,8 +78,12 @@ export default function ManagerPage() {
     const [attendanceFrom, setAttendanceFrom] = useState("")
     const [attendanceTo, setAttendanceTo] = useState("")
 
-    // ==================== رصيد الإجازات ====================
-    const [leaveBalance, setLeaveBalance] = useState({ total: 21, used: 0, remaining: 21 })
+    // ==================== إعدادات الحساب ====================
+    const [currentPassword, setCurrentPassword] = useState("")
+    const [newPassword, setNewPassword] = useState("")
+    const [confirmPassword, setConfirmPassword] = useState("")
+    const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+    const [changingPassword, setChangingPassword] = useState(false)
 
     // =============================================
     // useEffect لتحميل البيانات
@@ -75,6 +93,7 @@ export default function ManagerPage() {
         const storedUsername = localStorage.getItem("username")
         const storedId = localStorage.getItem("employee_id")
         const storedRole = localStorage.getItem("role")
+        const storedJobTitle = localStorage.getItem("job_title")
 
         if (!storedName || !storedId || storedRole !== "manager") {
             alert("غير مصرح بالدخول")
@@ -85,10 +104,12 @@ export default function ManagerPage() {
         setManagerName(storedName)
         setManagerUsername(storedUsername || "")
         setManagerId(storedId)
+        setJobTitle(storedJobTitle || "مدير")
 
+        // تحميل البيانات
         fetchManagedDepartments(storedId)
         fetchMyLeaveRequests(storedId)
-        fetchLeaveBalance(storedId)
+        fetchMyLeaveBalance(storedId)
         fetchTodayAttendance(storedUsername || "")
 
         // الحصول على الموقع الجغرافي
@@ -110,13 +131,66 @@ export default function ManagerPage() {
     }, [])
 
     // =============================================
+    // دوال تغيير كلمة المرور
+    // =============================================
+    const handleChangePassword = async () => {
+        setPasswordMessage(null)
+
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'جميع الحقول مطلوبة' })
+            return
+        }
+
+        if (newPassword !== confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'كلمة المرور الجديدة غير متطابقة' })
+            return
+        }
+
+        if (newPassword.length < 3) {
+            setPasswordMessage({ type: 'error', text: 'كلمة المرور يجب أن تكون 3 أحرف على الأقل' })
+            return
+        }
+
+        setChangingPassword(true)
+
+        try {
+            const res = await fetch("/api/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employee_id: managerId,
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword
+                })
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                setPasswordMessage({ type: 'success', text: data.message })
+                setCurrentPassword("")
+                setNewPassword("")
+                setConfirmPassword("")
+
+                if (localStorage.getItem("remembered_username")) {
+                    localStorage.setItem("remembered_password", newPassword)
+                }
+            } else {
+                setPasswordMessage({ type: 'error', text: data.error })
+            }
+        } catch (err) {
+            setPasswordMessage({ type: 'error', text: 'حدث خطأ في الاتصال' })
+        } finally {
+            setChangingPassword(false)
+        }
+    }
+
+    // =============================================
     // دوال جلب البيانات
     // =============================================
     const fetchManagedDepartments = async (managerId: string) => {
         try {
-            setLoading(true)
-
-            // جلب الأقسام التي يديرها هذا المدير
             const res = await fetch(`/api/departments/managers?manager_id=${managerId}`)
             if (res.ok) {
                 const data = await res.json()
@@ -129,7 +203,6 @@ export default function ManagerPage() {
                     return
                 }
 
-                // جلب أسماء الأقسام
                 const deptsRes = await fetch("/api/departments")
                 if (deptsRes.ok) {
                     const allDepts = await deptsRes.json()
@@ -139,8 +212,8 @@ export default function ManagerPage() {
                     const deptNames = myDepts.map((d: any) => d.name).join("، ")
                     setManagedDeptsNames(deptNames)
 
-                    // جلب الطلبات الخاصة بهذه الأقسام
-                    fetchLeaveRequests(deptIds, "pending")
+                    // جلب جميع الطلبات
+                    await fetchAllRequests(deptIds, "pending")
                 }
             }
         } catch (err) {
@@ -149,36 +222,46 @@ export default function ManagerPage() {
         }
     }
 
-    const fetchLeaveRequests = async (deptIds: number[], statusFilter: string = "pending") => {
+    const fetchAllRequests = async (deptIds: number[], statusFilter: string = "pending") => {
         try {
-            let url = "/api/leave-requests?user_role=manager"
+            // 1️⃣ جلب طلبات الإجازات
+            const leavesRes = await fetch(`/api/leave-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
+            const leaves = leavesRes.ok ? await leavesRes.json() : []
 
-            // إضافة أقسام المدير
-            if (deptIds.length > 0) {
-                url += `&department_ids=${deptIds.join(',')}`
-            }
+            // 2️⃣ جلب طلبات الأوفر تايم
+            const overtimeRes = await fetch(`/api/overtime-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
+            const overtime = overtimeRes.ok ? await overtimeRes.json() : []
 
-            // إضافة فلتر الحالة
-            if (statusFilter === "pending") {
-                url += `&status=pending`
-            } else if (statusFilter === "approved") {
-                url += `&status=approved`
-            } else if (statusFilter === "rejected") {
-                url += `&status=rejected`
-            }
+            // 3️⃣ جلب طلبات الإذن
+            const permissionRes = await fetch(`/api/permission-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
+            const permission = permissionRes.ok ? await permissionRes.json() : []
 
-            // إضافة فلتر القسم المحدد
+            // 4️⃣ جلب طلبات تصحيح البصمة
+            const correctionRes = await fetch(`/api/attendance-correction?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
+            const correction = correctionRes.ok ? await correctionRes.json() : []
+
+            // دمج كل الطلبات
+            const combined = [
+                ...leaves.map((r: any) => ({ ...r, requestType: "leave", requestTypeText: "إجازة" })),
+                ...overtime.map((r: any) => ({ ...r, requestType: "overtime", requestTypeText: "أوفر تايم" })),
+                ...permission.map((r: any) => ({ ...r, requestType: "permission", requestTypeText: "إذن" })),
+                ...correction.map((r: any) => ({ ...r, requestType: "correction", requestTypeText: "تصحيح بصمة" }))
+            ]
+
+            combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+            let filtered = combined
             if (selectedDepartment && selectedDepartment !== "all") {
-                url += `&department_id=${selectedDepartment}`
+                filtered = filtered.filter(r => r.employees?.department_id === Number(selectedDepartment))
+            }
+            if (requestsType !== "all") {
+                filtered = filtered.filter(r => r.requestType === requestsType)
             }
 
-            const res = await fetch(url)
-            if (res.ok) {
-                const data = await res.json()
-                setLeaveRequests(data)
-            }
-        } catch (err) { console.error(err) }
-        finally {
+            setAllRequests(filtered)
+            setLoading(false)
+        } catch (err) {
+            console.error(err)
             setLoading(false)
         }
     }
@@ -193,10 +276,24 @@ export default function ManagerPage() {
         } catch (err) { console.error(err) }
     }
 
-    const fetchLeaveBalance = async (empId: string) => {
+    const fetchMyLeaveBalance = async (empId: string) => {
         try {
-            const res = await fetch(`/api/leave-balance?employee_id=${empId}`)
-            if (res.ok) setLeaveBalance(await res.json())
+            const res = await fetch(`/api/leave-calculator?employee_id=${empId}`)
+            const data = await res.json()
+            if (res.ok) {
+                setMyLeaveBalance({
+                    total: data.annual_leave_total || 0,
+                    used: data.used_days || 0,
+                    remaining: data.remaining_annual || 0,
+                    emergency_total: data.emergency_leave_total || 7,
+                    emergency_used: data.used_emergency_days || 0,
+                    emergency_remaining: data.remaining_emergency || 7,
+                    yearsOfService: data.years_of_service || 0,
+                    hire_date: data.hire_date || "",
+                    message: data.message || ""
+                })
+                setHireDate(data.hire_date || "")
+            }
         } catch (err) { console.error(err) }
     }
 
@@ -220,15 +317,22 @@ export default function ManagerPage() {
     }
 
     // =============================================
-    // دوال الموافقة على الطلبات
+    // دوال الموافقة على جميع أنواع الطلبات
     // =============================================
-    const approveRequest = async (id: string) => {
+    const approveAnyRequest = async (req: any) => {
         try {
-            const res = await fetch("/api/leave-requests", {
+            let endpoint = ""
+            if (req.requestType === "leave") endpoint = "/api/leave-requests"
+            else if (req.requestType === "overtime") endpoint = "/api/overtime-requests"
+            else if (req.requestType === "permission") endpoint = "/api/permission-requests"
+            else if (req.requestType === "correction") endpoint = "/api/attendance-correction"
+            else return
+
+            const res = await fetch(endpoint, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    id,
+                    id: req.id,
                     action: "approve",
                     approved_by: managerId,
                     user_role: "manager"
@@ -237,18 +341,25 @@ export default function ManagerPage() {
             const data = await res.json()
             alert(data.message || data.error)
             if (res.ok) {
-                fetchLeaveRequests(managedDepts, filter)
+                fetchAllRequests(managedDepts, filter)
             }
         } catch (err) { console.error(err) }
     }
 
-    const rejectRequest = async (id: string) => {
+    const rejectAnyRequest = async (req: any) => {
         try {
-            const res = await fetch("/api/leave-requests", {
+            let endpoint = ""
+            if (req.requestType === "leave") endpoint = "/api/leave-requests"
+            else if (req.requestType === "overtime") endpoint = "/api/overtime-requests"
+            else if (req.requestType === "permission") endpoint = "/api/permission-requests"
+            else if (req.requestType === "correction") endpoint = "/api/attendance-correction"
+            else return
+
+            const res = await fetch(endpoint, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    id,
+                    id: req.id,
                     action: "reject",
                     approved_by: managerId,
                     user_role: "manager"
@@ -257,7 +368,7 @@ export default function ManagerPage() {
             const data = await res.json()
             alert(data.message || data.error)
             if (res.ok) {
-                fetchLeaveRequests(managedDepts, filter)
+                fetchAllRequests(managedDepts, filter)
             }
         } catch (err) { console.error(err) }
     }
@@ -267,6 +378,17 @@ export default function ManagerPage() {
     // =============================================
     const submitMyLeaveRequest = async () => {
         if (!myLeaveStart || !myLeaveEnd) return alert("حدد تاريخ البداية والنهاية")
+
+        const start = new Date(myLeaveStart)
+        const end = new Date(myLeaveEnd)
+        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+        if (myLeaveType === "سنوية" && days > myLeaveBalance.remaining) {
+            return alert(`❌ لا يوجد رصيد كافٍ. المتبقي: ${myLeaveBalance.remaining} يوم`)
+        }
+        if (myLeaveType === "عارضة" && days > myLeaveBalance.emergency_remaining) {
+            return alert(`❌ لا يوجد رصيد كافٍ للعارضة. المتبقي: ${myLeaveBalance.emergency_remaining} يوم`)
+        }
 
         const res = await fetch("/api/leave-requests", {
             method: "POST",
@@ -288,7 +410,7 @@ export default function ManagerPage() {
             setMyLeaveEnd("")
             setMyLeaveReason("")
             fetchMyLeaveRequests(managerId)
-            fetchLeaveBalance(managerId)
+            fetchMyLeaveBalance(managerId)
         }
     }
 
@@ -303,7 +425,7 @@ export default function ManagerPage() {
             alert(data.message || data.error)
             if (res.ok) {
                 fetchMyLeaveRequests(managerId)
-                fetchLeaveBalance(managerId)
+                fetchMyLeaveBalance(managerId)
             }
         } catch (err) { console.error(err) }
     }
@@ -332,26 +454,24 @@ export default function ManagerPage() {
     // =============================================
     const handleFilterChange = (newFilter: "all" | "pending" | "approved" | "rejected") => {
         setFilter(newFilter)
-        fetchLeaveRequests(managedDepts, newFilter)
+        fetchAllRequests(managedDepts, newFilter)
     }
 
     const handleDepartmentChange = (deptId: string) => {
         setSelectedDepartment(deptId)
-        if (deptId === "all") {
-            fetchLeaveRequests(managedDepts, filter)
-        } else {
-            fetchLeaveRequests([Number(deptId)], filter)
-        }
+        fetchAllRequests(managedDepts, filter)
+    }
+
+    const handleTypeChange = (type: "all" | "leave" | "overtime" | "permission" | "correction") => {
+        setRequestsType(type)
+        fetchAllRequests(managedDepts, filter)
     }
 
     // =============================================
     // دالة تسجيل الخروج
     // =============================================
     const handleLogout = () => {
-        // مسح localStorage
         localStorage.clear()
-
-        // مسح cookies
         document.cookie = "role=; path=/; max-age=0"
         document.cookie = "employee_id=; path=/; max-age=0"
         document.cookie = "remembered=; path=/; max-age=0"
@@ -368,7 +488,7 @@ export default function ManagerPage() {
         return new Date(dateString).toLocaleTimeString()
     }
 
-    const getApprovalStatus = (req: LeaveRequest) => {
+    const getApprovalStatus = (req: any) => {
         if (req.status === "مرفوضة") return { text: "❌ مرفوضة", color: "#f44336" }
         if (req.status === "تمت الموافقة") return { text: "✅ معتمدة", color: "#4caf50" }
 
@@ -385,14 +505,14 @@ export default function ManagerPage() {
         return { text: "🕒 في انتظار الموافقات", color: "#9e9e9e" }
     }
 
-    if (loading && activeTab === "requests") {
-        return (
-            <div style={styles.page}>
-                <div style={styles.container}>
-                    <p style={{ textAlign: 'center', padding: 40 }}>جاري تحميل البيانات...</p>
-                </div>
-            </div>
-        )
+    const getRequestTypeColor = (type: string) => {
+        switch (type) {
+            case "leave": return "#2196f3"
+            case "overtime": return "#ff9800"
+            case "permission": return "#9c27b0"
+            case "correction": return "#f44336"
+            default: return "#757575"
+        }
     }
 
     return (
@@ -404,12 +524,31 @@ export default function ManagerPage() {
                     <button onClick={handleLogout} style={styles.logoutButton}>تسجيل خروج</button>
                 </div>
 
-                {/* اسم المدير والأقسام التي يديرها */}
-                <div style={styles.welcomeCard}>
-                    <p style={styles.welcomeText}>مرحباً {managerName}</p>
-                    <p style={styles.deptText}>
-                        الأقسام التي تديرها: <strong>{managedDeptsNames || "لا يوجد أقسام"}</strong>
-                    </p>
+                {/* بطاقة معلومات المدير */}
+                <div style={styles.profileCard}>
+                    <div style={styles.profileHeader}>
+                        <div style={styles.profileAvatar}>
+                            {managerName.charAt(0)}
+                        </div>
+                        <div style={styles.profileInfo}>
+                            <h3 style={styles.profileName}>{managerName}</h3>
+                            <p style={styles.profileJob}>{jobTitle}</p>
+                            <div style={styles.profileDetails}>
+                                <span style={styles.profileDetail}>
+                                    <span style={styles.detailIcon}>📅</span>
+                                    تعيين: {hireDate ? formatDate(hireDate) : "غير محدد"}
+                                </span>
+                                <span style={styles.profileDetail}>
+                                    <span style={styles.detailIcon}>⏳</span>
+                                    مدة الخدمة: {myLeaveBalance.yearsOfService} سنة
+                                </span>
+                                <span style={styles.profileDetail}>
+                                    <span style={styles.detailIcon}>👥</span>
+                                    الأقسام: {managedDeptsNames || "لا يوجد"}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* شريط التبويبات */}
@@ -444,6 +583,16 @@ export default function ManagerPage() {
                     >
                         🏖️ طلباتي
                     </button>
+                    <button
+                        onClick={() => setActiveTab("settings")}
+                        style={{
+                            ...styles.tabButton,
+                            backgroundColor: activeTab === "settings" ? '#1976d2' : '#e0e0e0',
+                            color: activeTab === "settings" ? 'white' : '#333',
+                        }}
+                    >
+                        ⚙️ إعدادات
+                    </button>
                 </div>
 
                 {/* ========================================= */}
@@ -451,7 +600,7 @@ export default function ManagerPage() {
                 {/* ========================================= */}
                 {activeTab === "requests" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>طلبات إجازات الموظفين</h3>
+                        <h3 style={styles.sectionTitle}>طلبات الموظفين</h3>
 
                         {/* شريط الفلاتر */}
                         <div style={styles.filterTabs}>
@@ -497,10 +646,9 @@ export default function ManagerPage() {
                             </button>
                         </div>
 
-                        {/* فلتر الأقسام (إذا كان يدير أكثر من قسم) */}
-                        {departments.length > 1 && (
-                            <div style={styles.filterSection}>
-                                <label>القسم: </label>
+                        {/* فلاتر إضافية */}
+                        <div style={styles.filterSection}>
+                            {departments.length > 1 && (
                                 <select
                                     value={selectedDepartment}
                                     onChange={e => handleDepartmentChange(e.target.value)}
@@ -511,8 +659,20 @@ export default function ManagerPage() {
                                         <option key={dept.id} value={dept.id}>{dept.name}</option>
                                     ))}
                                 </select>
-                            </div>
-                        )}
+                            )}
+
+                            <select
+                                value={requestsType}
+                                onChange={e => handleTypeChange(e.target.value as any)}
+                                style={styles.select}
+                            >
+                                <option value="all">كل الأنواع</option>
+                                <option value="leave">🏖️ إجازات</option>
+                                <option value="overtime">⏰ أوفر تايم</option>
+                                <option value="permission">⏳ إذون</option>
+                                <option value="correction">🔧 تصحيح بصمة</option>
+                            </select>
+                        </div>
 
                         {/* جدول الطلبات */}
                         <div style={styles.tableContainer}>
@@ -521,52 +681,103 @@ export default function ManagerPage() {
                                     <tr>
                                         <th style={styles.tableHeader}>الموظف</th>
                                         <th style={styles.tableHeader}>القسم</th>
-                                        <th style={styles.tableHeader}>النوع</th>
-                                        <th style={styles.tableHeader}>المدة</th>
-                                        <th style={styles.tableHeader}>السبب</th>
+                                        <th style={styles.tableHeader}>نوع الطلب</th>
+                                        <th style={styles.tableHeader}>التفاصيل</th>
                                         <th style={styles.tableHeader}>حالة الموافقات</th>
                                         <th style={styles.tableHeader}>الإجراءات</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {leaveRequests.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7} style={styles.emptyCell}>
-                                                لا توجد طلبات في الأقسام التابعة لك
-                                            </td>
-                                        </tr>
+                                    {loading ? (
+                                        <tr><td colSpan={6} style={styles.emptyCell}>جاري التحميل...</td></tr>
+                                    ) : allRequests.length === 0 ? (
+                                        <tr><td colSpan={6} style={styles.emptyCell}>لا توجد طلبات</td></tr>
                                     ) : (
-                                        leaveRequests.map(req => {
+                                        allRequests.map(req => {
                                             const status = getApprovalStatus(req)
                                             const deptName = departments.find(d => d.id === req.employees?.department_id)?.name || "-"
                                             const canApprove = !req.manager_approved && req.status === "قيد الانتظار"
+
+                                            let details = ""
+                                            if (req.requestType === "leave") {
+                                                details = `${req.leave_type} - من ${req.start_date} إلى ${req.end_date}`
+                                            } else if (req.requestType === "overtime") {
+                                                details = `${req.date} - ${req.hours} ساعة`
+                                            } else if (req.requestType === "permission") {
+                                                details = `${req.date} - ${req.permission_type}`
+                                                if (req.start_time) details += ` من ${req.start_time}`
+                                                if (req.end_time) details += ` إلى ${req.end_time}`
+                                            } else if (req.requestType === "correction") {
+                                                details = `${req.date}`
+                                                if (req.expected_check_in) details += ` - حضور: ${req.expected_check_in}`
+                                                if (req.expected_check_out) details += ` - انصراف: ${req.expected_check_out}`
+                                            }
 
                                             return (
                                                 <tr key={req.id}>
                                                     <td style={styles.tableCell}>{req.employees?.name}</td>
                                                     <td style={styles.tableCell}>{deptName}</td>
-                                                    <td style={styles.tableCell}>{req.leave_type}</td>
                                                     <td style={styles.tableCell}>
-                                                        من {formatDate(req.start_date)} إلى {formatDate(req.end_date)}
-                                                    </td>
-                                                    <td style={styles.tableCell}>{req.reason || "-"}</td>
-                                                    <td style={styles.tableCell}>
-                                                        <span style={{ ...styles.statusBadge, backgroundColor: status.color }}>
-                                                            {status.text}
+                                                        <span style={{ ...styles.typeBadge, backgroundColor: getRequestTypeColor(req.requestType) }}>
+                                                            {req.requestTypeText}
                                                         </span>
+                                                    </td>
+                                                    <td style={styles.tableCell}>{details}</td>
+                                                    <td style={styles.tableCell}>
+                                                        {req.status === "مرفوضة" ? (
+                                                            <span style={{
+                                                                ...styles.approvalBadge,
+                                                                backgroundColor: '#ffebee',
+                                                                color: '#f44336',
+                                                                border: '1px solid #f44336'
+                                                            }}>
+                                                                ❌ مرفوضة
+                                                            </span>
+                                                        ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                            <span style={{
+                                                                ...styles.approvalBadge,
+                                                                backgroundColor: '#e8f5e9',
+                                                                color: '#2e7d32',
+                                                                border: '1px solid #4caf50'
+                                                            }}>
+                                                                ✅ معتمدة
+                                                            </span>
+                                                        ) : (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                                <span style={{
+                                                                    ...styles.approvalBadge,
+                                                                    backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                                    color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                                    border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                                }}>
+                                                                    HR : {req.hr_approved ? '✅ موافق' : '⏳ في انتظار'}
+                                                                </span>
+                                                                <span style={{
+                                                                    ...styles.approvalBadge,
+                                                                    backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                                    color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                                    border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                                }}>
+                                                                    Manager: {req.manager_approved ? '✅ موافق' : '⏳ في انتظار'}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {req.pending_from && (
+                                                            <div style={styles.pendingInfo}>في انتظار: {req.pending_from}</div>
+                                                        )}
                                                     </td>
                                                     <td style={styles.tableCell}>
                                                         {canApprove && (
                                                             <>
                                                                 <button
-                                                                    onClick={() => approveRequest(req.id)}
+                                                                    onClick={() => approveAnyRequest(req)}
                                                                     style={styles.approveButton}
                                                                     title="موافقة"
                                                                 >
                                                                     ✓
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => rejectRequest(req.id)}
+                                                                    onClick={() => rejectAnyRequest(req)}
                                                                     style={styles.rejectButton}
                                                                     title="رفض"
                                                                 >
@@ -718,26 +929,23 @@ export default function ManagerPage() {
 
                         {/* كرت رصيد الإجازات */}
                         <div style={styles.balanceCard}>
-                            <h4 style={styles.balanceTitle}>رصيد الإجازات السنوية</h4>
+                            <h4 style={styles.balanceTitle}>رصيد الإجازات</h4>
+                            {myLeaveBalance.message && (
+                                <p style={styles.balanceMessage}>{myLeaveBalance.message}</p>
+                            )}
+
                             <div style={styles.balanceRow}>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>إجمالي الرصيد</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.total} يوم</span>
+                                    <span style={styles.balanceLabel}>السنوية</span>
+                                    <span style={styles.balanceValue}>{myLeaveBalance.remaining} / {myLeaveBalance.total}</span>
                                 </div>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>مستخدم</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.used} يوم</span>
+                                    <span style={styles.balanceLabel}>العارضة</span>
+                                    <span style={styles.balanceValue}>{myLeaveBalance.emergency_remaining} / {myLeaveBalance.emergency_total}</span>
                                 </div>
-                                <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>المتبقي</span>
-                                    <span style={{
-                                        ...styles.balanceValue,
-                                        color: leaveBalance.remaining > 0 ? '#4caf50' : '#f44336',
-                                        fontWeight: 'bold'
-                                    }}>
-                                        {leaveBalance.remaining} يوم
-                                    </span>
-                                </div>
+                            </div>
+                            <div style={styles.progressBar}>
+                                <div style={{ ...styles.progressFill, width: `${(myLeaveBalance.used / myLeaveBalance.total) * 100}%` }} />
                             </div>
                         </div>
 
@@ -824,6 +1032,75 @@ export default function ManagerPage() {
                     </div>
                 )}
 
+                {/* ========================================= */}
+                {/* تبويب الإعدادات */}
+                {/* ========================================= */}
+                {activeTab === "settings" && (
+                    <div style={styles.tabContent}>
+                        <h3 style={styles.sectionTitle}>إعدادات الحساب</h3>
+
+                        <div style={styles.settingsCard}>
+                            <h4 style={styles.settingsTitle}>تغيير كلمة المرور</h4>
+
+                            <div style={styles.inputGroup}>
+                                <label style={styles.inputLabel}>كلمة المرور الحالية</label>
+                                <input
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    placeholder="********"
+                                    style={styles.input}
+                                />
+                            </div>
+
+                            <div style={styles.inputGroup}>
+                                <label style={styles.inputLabel}>كلمة المرور الجديدة</label>
+                                <input
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    placeholder="********"
+                                    style={styles.input}
+                                />
+                            </div>
+
+                            <div style={styles.inputGroup}>
+                                <label style={styles.inputLabel}>تأكيد كلمة المرور الجديدة</label>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="********"
+                                    style={styles.input}
+                                />
+                            </div>
+
+                            {passwordMessage && (
+                                <div style={{
+                                    ...styles.messageBox,
+                                    backgroundColor: passwordMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
+                                    color: passwordMessage.type === 'success' ? '#065f46' : '#991b1b',
+                                    border: `1px solid ${passwordMessage.type === 'success' ? '#a7f3d0' : '#fecaca'}`
+                                }}>
+                                    {passwordMessage.text}
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleChangePassword}
+                                disabled={changingPassword}
+                                style={{
+                                    ...styles.saveButton,
+                                    opacity: changingPassword ? 0.7 : 1,
+                                    cursor: changingPassword ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {changingPassword ? 'جاري الحفظ...' : '💾 حفظ كلمة المرور الجديدة'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* الفوتر */}
                 <div style={styles.footer}>
                     &copy; 2026 Khaled Aboellil. جميع الحقوق محفوظة.
@@ -833,12 +1110,11 @@ export default function ManagerPage() {
     )
 }
 
-// ==================== الأنماط ====================
+// ==================== الأنماط (نفس صفحة الموظف) ====================
 const styles: { [key: string]: React.CSSProperties } = {
     page: {
         fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
-        color: '#000',
-        background: 'linear-gradient(to right, #0b3d91, #1976d2)',
+        background: '#f0f2f5',
         minHeight: '100vh',
         padding: 20,
         display: 'flex',
@@ -846,12 +1122,12 @@ const styles: { [key: string]: React.CSSProperties } = {
         alignItems: 'flex-start'
     },
     container: {
-        background: '#fff',
-        borderRadius: 20,
-        padding: 30,
+        background: '#ffffff',
+        borderRadius: 16,
+        padding: 24,
         width: '95%',
         maxWidth: 1200,
-        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
     },
     header: {
         display: 'flex',
@@ -860,82 +1136,97 @@ const styles: { [key: string]: React.CSSProperties } = {
         marginBottom: 20
     },
     title: {
-        textAlign: 'center',
-        color: '#0b3d91',
-        margin: 0,
-        fontSize: 24
+        fontSize: 24,
+        fontWeight: '600',
+        color: '#1e293b',
+        margin: 0
     },
     logoutButton: {
-        padding: '8px 15px',
+        padding: '8px 16px',
         border: 'none',
-        borderRadius: 10,
-        backgroundColor: '#d32f2f',
+        borderRadius: 8,
+        backgroundColor: '#ef4444',
         color: '#fff',
-        fontWeight: 'bold',
+        fontWeight: '500',
         cursor: 'pointer'
     },
-    welcomeCard: {
-        backgroundColor: '#e3f2fd',
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 20,
-        textAlign: 'center'
+    profileCard: {
+        backgroundColor: '#3b82f6',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 24,
+        boxShadow: '0 4px 8px rgba(59, 130, 246, 0.3)'
     },
-    welcomeText: {
-        fontSize: 18,
-        color: '#0b3d91',
-        margin: 0,
+    profileHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20
+    },
+    profileAvatar: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#ffffff',
+        color: '#1e293b',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 28,
         fontWeight: 'bold'
     },
-    deptText: {
+    profileInfo: {
+        flex: 1
+    },
+    profileName: {
+        fontSize: 22,
+        fontWeight: '600',
+        margin: 0,
+        marginBottom: 4,
+        color: '#ffffff'
+    },
+    profileJob: {
+        fontSize: 15,
+        margin: 0,
+        marginBottom: 8,
+        color: '#1e293b',
+        fontWeight: '500'
+    },
+    profileDetails: {
+        display: 'flex',
+        gap: 16,
+        flexWrap: 'wrap'
+    },
+    profileDetail: {
+        fontSize: 13,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        padding: '4px 10px',
+        borderRadius: 16,
+        color: '#ffffff'
+    },
+    detailIcon: {
         fontSize: 14,
-        color: '#1976d2',
-        marginTop: 5
+        color: '#ffffff'
     },
     tabBar: {
         display: 'flex',
-        gap: 5,
-        marginBottom: 25,
-        borderBottom: '2px solid #1976d2',
-        paddingBottom: 5,
-        flexWrap: 'wrap'
+        gap: 8,
+        marginBottom: 24,
+        flexWrap: 'wrap',
+        borderBottom: '1px solid #e2e8f0',
+        paddingBottom: 8
     },
     tabButton: {
-        padding: '10px 20px',
+        padding: '10px 16px',
         border: 'none',
+        borderRadius: 8,
         cursor: 'pointer',
-        borderRadius: '10px 10px 0 0',
-        fontWeight: 'bold',
-        fontSize: 16,
-        transition: 'all 0.3s'
-    },
-    tabContent: {
-        minHeight: 400,
-        padding: '10px 0'
-    },
-    sectionTitle: {
-        color: '#0b3d91',
-        fontSize: 20,
-        marginBottom: 15
-    },
-    sectionHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 15
-    },
-    subTitle: {
-        color: '#333',
-        fontSize: 16,
-        marginBottom: 10,
-        marginTop: 10
-    },
-    formTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1976d2',
-        marginBottom: 15,
-        textAlign: 'center'
+        fontWeight: '500',
+        fontSize: 14,
+        backgroundColor: '#f1f5f9',
+        color: '#1e293b'
     },
     filterTabs: {
         display: 'flex',
@@ -949,62 +1240,134 @@ const styles: { [key: string]: React.CSSProperties } = {
         borderRadius: 6,
         fontWeight: 'bold',
         fontSize: 14,
+        cursor: 'pointer'
+    },
+    tabContent: {
+        minHeight: 400,
+        padding: '8px 0'
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 16
+    },
+    sectionHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16
+    },
+    subTitle: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#1e293b',
+        marginBottom: 12,
+        marginTop: 16
+    },
+    attendanceCard: {
+        background: '#ffffff',
+        borderRadius: 12,
+        padding: 20,
+        border: '1px solid #e2e8f0'
+    },
+    locationStatus: {
+        padding: 12,
+        backgroundColor: '#e0f2fe',
+        borderRadius: 8,
+        marginBottom: 16,
+        color: '#1e293b',
+        fontWeight: '500',
+        textAlign: 'center',
+        fontSize: 14,
+        border: '1px solid #bae6fd'
+    },
+    buttonGroup: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 24,
+        justifyContent: 'center'
+    },
+    checkInButton: {
+        padding: '10px 24px',
+        border: 'none',
+        borderRadius: 8,
+        backgroundColor: '#22c55e',
+        color: '#ffffff',
+        fontWeight: '500',
         cursor: 'pointer',
-        transition: 'all 0.3s'
+        fontSize: 14
+    },
+    checkOutButton: {
+        padding: '10px 24px',
+        border: 'none',
+        borderRadius: 8,
+        backgroundColor: '#ef4444',
+        color: '#ffffff',
+        fontWeight: '500',
+        cursor: 'pointer',
+        fontSize: 14
     },
     filterSection: {
         display: 'flex',
-        gap: 10,
+        gap: 12,
         alignItems: 'center',
         flexWrap: 'wrap',
-        marginBottom: 20,
-        padding: 15,
-        backgroundColor: '#f5f5f5',
-        borderRadius: 10
+        marginBottom: 16,
+        padding: 16,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        border: '1px solid #e2e8f0'
     },
     filterRow: {
         display: 'flex',
-        gap: 10,
+        gap: 12,
         alignItems: 'center',
-        flexWrap: 'wrap',
-        marginBottom: 15
+        flexWrap: 'wrap'
     },
     select: {
-        padding: 8,
+        padding: '8px 12px',
         borderRadius: 6,
-        border: '1px solid #ccc',
+        border: '1px solid #cbd5e1',
         fontSize: 14,
-        minWidth: 200
+        minWidth: 140,
+        backgroundColor: '#ffffff',
+        color: '#1e293b'
     },
     dateInput: {
-        padding: 8,
+        padding: '8px 12px',
         borderRadius: 6,
-        border: '1px solid #ccc',
-        fontSize: 14
+        border: '1px solid #cbd5e1',
+        fontSize: 14,
+        backgroundColor: '#ffffff',
+        color: '#1e293b'
     },
     viewButton: {
-        padding: '8px 20px',
+        padding: '8px 16px',
         border: 'none',
         borderRadius: 6,
-        backgroundColor: '#1976d2',
-        color: '#fff',
-        fontSize: 14,
-        cursor: 'pointer'
+        backgroundColor: '#3b82f6',
+        color: '#ffffff',
+        cursor: 'pointer',
+        fontWeight: '500',
+        fontSize: 14
     },
     addButton: {
-        padding: '8px 15px',
+        padding: '8px 16px',
         border: 'none',
         borderRadius: 6,
-        backgroundColor: '#4caf50',
-        color: '#fff',
-        fontSize: 14,
-        cursor: 'pointer'
+        backgroundColor: '#22c55e',
+        color: '#ffffff',
+        cursor: 'pointer',
+        fontWeight: '500',
+        fontSize: 14
     },
     tableContainer: {
         maxHeight: 400,
         overflowY: 'auto',
-        border: '1px solid #e0e0e0',
-        borderRadius: 10
+        border: '1px solid #e2e8f0',
+        borderRadius: 8,
+        backgroundColor: '#ffffff'
     },
     table: {
         width: '100%',
@@ -1013,30 +1376,44 @@ const styles: { [key: string]: React.CSSProperties } = {
     },
     tableHeader: {
         padding: 12,
-        borderBottom: '2px solid #1976d2',
-        fontWeight: 'bold',
+        backgroundColor: '#f8fafc',
+        fontWeight: '600',
         textAlign: 'center',
-        backgroundColor: '#f5f5f5',
+        color: '#1e293b',
+        borderBottom: '2px solid #e2e8f0',
         position: 'sticky',
         top: 0
     },
     tableCell: {
-        padding: 8,
+        padding: 10,
         textAlign: 'center',
-        borderBottom: '1px solid #eee'
+        borderBottom: '1px solid #e2e8f0',
+        color: '#1e293b'
     },
     emptyCell: {
         padding: 30,
         textAlign: 'center',
-        color: '#666'
+        color: '#64748b'
     },
     statusBadge: {
         padding: '4px 8px',
         borderRadius: 4,
-        color: 'white',
-        fontSize: 12,
+        color: '#ffffff',
+        fontSize: 11,
+        fontWeight: '500'
+    },
+    typeBadge: {
+        padding: '4px 8px',
+        borderRadius: 4,
+        color: '#fff',
+        fontSize: 11,
         fontWeight: 'bold',
         display: 'inline-block'
+    },
+    pendingInfo: {
+        fontSize: 11,
+        color: '#ff9800',
+        marginTop: 4
     },
     approveButton: {
         padding: '5px 10px',
@@ -1045,8 +1422,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         borderRadius: 4,
         backgroundColor: '#4caf50',
         color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontSize: 14,
         cursor: 'pointer'
     },
     rejectButton: {
@@ -1056,8 +1432,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         borderRadius: 4,
         backgroundColor: '#f44336',
         color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontSize: 14,
         cursor: 'pointer'
     },
     approvedBadge: {
@@ -1069,60 +1444,120 @@ const styles: { [key: string]: React.CSSProperties } = {
         fontWeight: 'bold',
         display: 'inline-block'
     },
+    balanceCard: {
+        backgroundColor: '#f0fdf4',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 20,
+        border: '1px solid #bbf7d0'
+    },
+    balanceTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 16,
+        textAlign: 'center'
+    },
+    balanceMessage: {
+        fontSize: 13,
+        color: '#3b82f6',
+        textAlign: 'center',
+        marginBottom: 12
+    },
+    balanceRow: {
+        display: 'flex',
+        justifyContent: 'space-around',
+        marginBottom: 16
+    },
+    balanceItem: {
+        textAlign: 'center'
+    },
+    balanceLabel: {
+        fontSize: 13,
+        color: '#475569',
+        display: 'block',
+        marginBottom: 4
+    },
+    balanceValue: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#1e293b'
+    },
+    progressBar: {
+        height: 8,
+        background: '#e0e0e0',
+        borderRadius: 4,
+        overflow: 'hidden'
+    },
+    progressFill: {
+        height: '100%',
+        background: 'linear-gradient(90deg, #4caf50 0%, #8bc34a 100%)',
+        transition: 'width 0.3s ease'
+    },
+    formCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 20,
+        border: '1px solid #e2e8f0'
+    },
+    formTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 16,
+        textAlign: 'center'
+    },
     input: {
         width: '100%',
         padding: 10,
-        marginBottom: 10,
+        marginBottom: 12,
         borderRadius: 6,
-        border: '1px solid #ccc',
-        fontSize: 14
+        border: '1px solid #cbd5e1',
+        fontSize: 14,
+        backgroundColor: '#ffffff',
+        color: '#1e293b'
     },
     textarea: {
         width: '100%',
         padding: 10,
-        marginBottom: 10,
+        marginBottom: 16,
         borderRadius: 6,
-        border: '1px solid #ccc',
+        border: '1px solid #cbd5e1',
         fontSize: 14,
-        fontFamily: 'inherit'
+        fontFamily: 'inherit',
+        backgroundColor: '#ffffff',
+        color: '#1e293b'
     },
     dateRow: {
         display: 'flex',
-        gap: 10,
-        marginBottom: 15
+        gap: 12,
+        marginBottom: 16
     },
     dateField: {
         flex: 1
-    },
-    formCard: {
-        backgroundColor: '#f8f9fa',
-        padding: 20,
-        borderRadius: 10,
-        marginBottom: 20,
-        border: '1px solid #e0e0e0'
     },
     submitButton: {
         width: '100%',
         padding: 12,
         border: 'none',
-        borderRadius: 6,
-        backgroundColor: '#1976d2',
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
+        borderRadius: 8,
+        backgroundColor: '#3b82f6',
+        color: '#ffffff',
+        fontWeight: '600',
         cursor: 'pointer',
-        marginTop: 10
+        fontSize: 14
     },
     requestsList: {
         maxHeight: 400,
         overflowY: 'auto'
     },
     requestCard: {
-        padding: 15,
-        border: '1px solid #e0e0e0',
-        borderRadius: 10,
-        marginBottom: 10,
-        backgroundColor: '#fff'
+        backgroundColor: '#ffffff',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 8,
+        border: '1px solid #e2e8f0'
     },
     requestHeader: {
         display: 'flex',
@@ -1131,127 +1566,95 @@ const styles: { [key: string]: React.CSSProperties } = {
         marginBottom: 8
     },
     requestType: {
-        fontWeight: 'bold',
-        fontSize: 16
+        fontWeight: '600',
+        fontSize: 14,
+        color: '#1e293b'
     },
     requestDates: {
-        margin: '5px 0',
-        color: '#555'
+        fontSize: 13,
+        color: '#475569',
+        marginBottom: 4
     },
     requestReason: {
-        margin: '5px 0',
-        color: '#666',
-        fontSize: 14
+        fontSize: 12,
+        color: '#64748b',
+        marginBottom: 8
     },
     requestFooter: {
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 8
+        alignItems: 'center'
     },
     requestDate: {
-        fontSize: 12,
-        color: '#999'
+        fontSize: 11,
+        color: '#94a3b8'
     },
     deleteButton: {
-        padding: '5px 10px',
+        padding: '4px 8px',
         border: 'none',
         borderRadius: 4,
-        backgroundColor: '#ff4444',
-        color: 'white',
+        backgroundColor: '#ef4444',
+        color: '#ffffff',
         fontSize: 12,
         cursor: 'pointer'
     },
     noData: {
         textAlign: 'center',
-        color: '#666',
-        padding: 40
-    },
-    attendanceCard: {
-        backgroundColor: '#f8f9fa',
-        padding: 15,
-        borderRadius: 12,
-        border: '1px solid #e0e0e0'
-    },
-    locationStatus: {
-        padding: 10,
-        backgroundColor: '#e3f2fd',
-        borderRadius: 8,
-        marginBottom: 15,
-        color: '#0b3d91',
-        fontWeight: 'bold',
-        textAlign: 'center',
+        color: '#94a3b8',
+        padding: 40,
         fontSize: 14
     },
-    buttonGroup: {
-        display: 'flex',
-        gap: 10,
+    settingsCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        padding: 24,
+        maxWidth: 500,
+        margin: '0 auto',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
+    },
+    settingsTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
         marginBottom: 20,
-        justifyContent: 'center'
-    },
-    checkInButton: {
-        padding: '12px 20px',
-        border: 'none',
-        borderRadius: 8,
-        backgroundColor: '#4caf50',
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
-        cursor: 'pointer',
-        flex: 1,
-        maxWidth: 150
-    },
-    checkOutButton: {
-        padding: '12px 20px',
-        border: 'none',
-        borderRadius: 8,
-        backgroundColor: '#f44336',
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
-        cursor: 'pointer',
-        flex: 1,
-        maxWidth: 150
-    },
-    balanceCard: {
-        backgroundColor: '#e8f5e8',
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 20,
-        border: '1px solid #c8e6c9'
-    },
-    balanceTitle: {
-        margin: 0,
-        fontSize: 16,
-        color: '#2e7d32',
         textAlign: 'center'
     },
-    balanceRow: {
-        display: 'flex',
-        justifyContent: 'space-around',
-        marginTop: 10
+    inputGroup: {
+        marginBottom: 20
     },
-    balanceItem: {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 5
+    inputLabel: {
+        display: 'block',
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#334155',
+        marginBottom: 6
     },
-    balanceLabel: {
-        fontSize: 12,
-        color: '#666'
+    messageBox: {
+        padding: 12,
+        borderRadius: 6,
+        marginBottom: 20,
+        fontSize: 14,
+        textAlign: 'center'
     },
-    balanceValue: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333'
+    saveButton: {
+        width: '100%',
+        padding: 12,
+        border: 'none',
+        borderRadius: 8,
+        backgroundColor: '#3b82f6',
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 16,
+        cursor: 'pointer',
+        transition: 'background-color 0.2s'
     },
     footer: {
-        marginTop: 25,
+        marginTop: 30,
         textAlign: 'center',
-        color: '#000',
-        fontSize: 12,
-        borderTop: '1px solid #ccc',
-        paddingTop: 15
+        color: '#64748b',
+        fontSize: 13,
+        borderTop: '1px solid #e2e8f0',
+        paddingTop: 20
     }
 }

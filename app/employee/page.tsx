@@ -10,7 +10,7 @@ export default function EmployeePage() {
     const [employeeUsername, setEmployeeUsername] = useState("")
     const [employeeId, setEmployeeId] = useState("")
     const [hireDate, setHireDate] = useState("")
-
+    const [jobTitle, setJobTitle] = useState("")
     // الحضور
     const [todayAttendance, setTodayAttendance] = useState<any>(null)
     const [attendanceHistory, setAttendanceHistory] = useState<any[]>([])
@@ -63,9 +63,15 @@ export default function EmployeePage() {
     const [permissionStartTime, setPermissionStartTime] = useState("")
     const [permissionEndTime, setPermissionEndTime] = useState("")
     const [permissionReason, setPermissionReason] = useState("")
-
+    // ==================== إعدادات الحساب ====================
+    const [showSettings, setShowSettings] = useState(false)
+    const [currentPassword, setCurrentPassword] = useState("")
+    const [newPassword, setNewPassword] = useState("")
+    const [confirmPassword, setConfirmPassword] = useState("")
+    const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+    const [changingPassword, setChangingPassword] = useState(false)
     // Active tab
-    const [activeTab, setActiveTab] = useState<"attendance" | "leave" | "overtime" | "correction" | "permission">("attendance")
+    const [activeTab, setActiveTab] = useState<"attendance" | "leave" | "overtime" | "correction" | "permission" | "settings">("attendance")
 
     // =============================================
     // useEffect لتحميل البيانات
@@ -74,7 +80,7 @@ export default function EmployeePage() {
         const storedUsername = localStorage.getItem("username")
         const storedName = localStorage.getItem("name")
         const storedId = localStorage.getItem("employee_id")
-
+        const storedJobTitle = localStorage.getItem("job_title")
         if (!storedUsername || !storedName) {
             alert("يجب تسجيل الدخول أولاً")
             router.push("/")
@@ -84,7 +90,7 @@ export default function EmployeePage() {
         setEmployeeUsername(storedUsername)
         setEmployeeName(storedName)
         setEmployeeId(storedId || "")
-
+        setJobTitle(storedJobTitle)
         fetchTodayAttendance(storedUsername)
         fetchLeaveBalance(storedId || "")
         fetchLeaveRequests(storedId || "")
@@ -109,6 +115,64 @@ export default function EmployeePage() {
             setLoadingPos(false)
         }
     }, [])
+    // =============================================
+    // دوال تغيير كلمة المرور
+    // =============================================
+    const handleChangePassword = async () => {
+        // reset message
+        setPasswordMessage(null)
+
+        // validation
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'جميع الحقول مطلوبة' })
+            return
+        }
+
+        if (newPassword !== confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'كلمة المرور الجديدة غير متطابقة' })
+            return
+        }
+
+        if (newPassword.length < 3) {
+            setPasswordMessage({ type: 'error', text: 'كلمة المرور يجب أن تكون 3 أحرف على الأقل' })
+            return
+        }
+
+        setChangingPassword(true)
+
+        try {
+            const res = await fetch("/api/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employee_id: employeeId,
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword
+                })
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                setPasswordMessage({ type: 'success', text: data.message })
+                setCurrentPassword("")
+                setNewPassword("")
+                setConfirmPassword("")
+
+                // لو المستخدم مختار "تذكرني"، نحدث الباسورد في localStorage
+                if (localStorage.getItem("remembered_username")) {
+                    localStorage.setItem("remembered_password", newPassword)
+                }
+            } else {
+                setPasswordMessage({ type: 'error', text: data.error })
+            }
+        } catch (err) {
+            setPasswordMessage({ type: 'error', text: 'حدث خطأ في الاتصال' })
+        } finally {
+            setChangingPassword(false)
+        }
+    }
 
     // =============================================
     // دوال الحضور والانصراف
@@ -444,18 +508,32 @@ export default function EmployeePage() {
                     <h2 style={styles.title}>صفحة الموظف</h2>
                     <button onClick={handleLogout} style={styles.logoutButton}>تسجيل خروج</button>
                 </div>
-
-                {/* اسم الموظف وتاريخ التعيين */}
-                <div style={styles.welcomeCard}>
-                    <p style={styles.welcomeText}>مرحباً {employeeName}</p>
-                    {hireDate && (
-                        <p style={styles.hireDateText}>
-                            تاريخ التعيين: {formatDate(hireDate)} |
-                            مدة الخدمة: {leaveBalance.yearsOfService} سنة
-                        </p>
-                    )}
+                {/* بطاقة معلومات الموظف (موحدة) */}
+                <div style={styles.profileCard}>
+                    <div style={styles.profileHeader}>
+                        <div style={styles.profileAvatar}>
+                            {employeeName.charAt(0)}
+                        </div>
+                        <div style={styles.profileInfo}>
+                            <h3 style={styles.profileName}>{employeeName}</h3>
+                            <p style={styles.profileJob}>{jobTitle}</p>
+                            <div style={styles.profileDetails}>
+                                <span style={styles.profileDetail}>
+                                    <span style={styles.detailIcon}>📅</span>
+                                    تعيين: {hireDate ? formatDate(hireDate) : "غير محدد"}
+                                </span>
+                                <span style={styles.profileDetail}>
+                                    <span style={styles.detailIcon}>⏳</span>
+                                    مدة الخدمة: {leaveBalance.yearsOfService} سنة
+                                </span>
+                                <span style={styles.profileDetail}>
+                                    <span style={styles.detailIcon}>👤</span>
+                                    {employeeUsername}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-
                 {/* شريط التبويبات */}
                 <div style={styles.tabBar}>
                     <button
@@ -507,6 +585,17 @@ export default function EmployeePage() {
                         }}
                     >
                         ⏳ إذن
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab("settings")}
+                        style={{
+                            ...styles.tabButton,
+                            backgroundColor: activeTab === "settings" ? '#1976d2' : '#e0e0e0',
+                            color: activeTab === "settings" ? 'white' : '#333',
+                        }}
+                    >
+                        ⚙️ إعدادات
                     </button>
                 </div>
 
@@ -578,7 +667,7 @@ export default function EmployeePage() {
                             <h4 style={{ ...styles.subTitle, marginTop: 20 }}>سجل الحضور السابق</h4>
                             <div style={styles.filterSection}>
                                 <div style={styles.filterRow}>
-                                    <label>من: </label>
+                                    <label style={styles.label}>من:</label>
                                     <input
                                         type="date"
                                         value={from}
@@ -587,7 +676,7 @@ export default function EmployeePage() {
                                     />
                                 </div>
                                 <div style={styles.filterRow}>
-                                    <label>إلى: </label>
+                                    <label style={styles.label}>إلى:</label>
                                     <input
                                         type="date"
                                         value={to}
@@ -707,11 +796,11 @@ export default function EmployeePage() {
 
                                 <div style={styles.dateRow}>
                                     <div style={styles.dateField}>
-                                        <label>من:</label>
+                                        <label style={styles.label}>من:</label>
                                         <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} style={styles.dateInput} />
                                     </div>
                                     <div style={styles.dateField}>
-                                        <label>إلى:</label>
+                                        <label style={styles.label}>إلى:</label>
                                         <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} style={styles.dateInput} />
                                     </div>
                                 </div>
@@ -742,12 +831,54 @@ export default function EmployeePage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{req.leave_type}</span>
-                                            <span style={{
-                                                ...styles.statusBadge,
-                                                backgroundColor: status.color
-                                            }}>
-                                                {status.text}
-                                            </span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <p style={styles.requestDates}>
@@ -793,12 +924,12 @@ export default function EmployeePage() {
                                 <h4 style={styles.formTitle}>طلب أوفر تايم جديد</h4>
 
                                 <div style={styles.dateField}>
-                                    <label>التاريخ:</label>
+                                    <label style={styles.label}>التاريخ:</label>
                                     <input type="date" value={overtimeDate} onChange={e => setOvertimeDate(e.target.value)} style={styles.dateInput} />
                                 </div>
 
                                 <div style={styles.hoursField}>
-                                    <label>عدد الساعات:</label>
+                                    <label style={styles.label}>عدد الساعات:</label>
                                     <input
                                         type="number"
                                         step="0.5"
@@ -836,12 +967,54 @@ export default function EmployeePage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>أوفر تايم</span>
-                                            <span style={{
-                                                ...styles.statusBadge,
-                                                backgroundColor: status.color
-                                            }}>
-                                                {status.text}
-                                            </span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <p style={styles.requestDates}>التاريخ: {req.date}</p>
@@ -885,7 +1058,7 @@ export default function EmployeePage() {
                                 <h4 style={styles.formTitle}>طلب تصحيح بصمة</h4>
 
                                 <div style={styles.dateField}>
-                                    <label>التاريخ المطلوب تصحيحه:</label>
+                                    <label style={styles.label}>التاريخ المطلوب تصحيحه:</label>
                                     <input
                                         type="date"
                                         value={correctionDate}
@@ -897,7 +1070,7 @@ export default function EmployeePage() {
 
                                 <div style={styles.timeRow}>
                                     <div style={styles.timeField}>
-                                        <label>وقت الحضور المفترض (اختياري):</label>
+                                        <label style={styles.label}>وقت الحضور المفترض (اختياري):</label>
                                         <input
                                             type="time"
                                             value={expectedCheckIn}
@@ -906,7 +1079,7 @@ export default function EmployeePage() {
                                         />
                                     </div>
                                     <div style={styles.timeField}>
-                                        <label>وقت الانصراف المفترض (اختياري):</label>
+                                        <label style={styles.label}>وقت الانصراف المفترض (اختياري):</label>
                                         <input
                                             type="time"
                                             value={expectedCheckOut}
@@ -942,12 +1115,54 @@ export default function EmployeePage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>تصحيح يوم {req.date}</span>
-                                            <span style={{
-                                                ...styles.statusBadge,
-                                                backgroundColor: status.color
-                                            }}>
-                                                {status.text}
-                                            </span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {(req.expected_check_in || req.expected_check_out) && (
@@ -1010,7 +1225,7 @@ export default function EmployeePage() {
                                 </select>
 
                                 <div style={styles.dateField}>
-                                    <label>التاريخ:</label>
+                                    <label style={styles.label}>التاريخ:</label>
                                     <input
                                         type="date"
                                         value={permissionDate}
@@ -1021,7 +1236,7 @@ export default function EmployeePage() {
 
                                 {(permissionType === "ساعة" || permissionType === "ساعتين") && (
                                     <div style={styles.timeField}>
-                                        <label>وقت بداية الإذن:</label>
+                                        <label style={styles.label}>وقت بداية الإذن:</label>
                                         <input
                                             type="time"
                                             value={permissionStartTime}
@@ -1034,7 +1249,7 @@ export default function EmployeePage() {
                                 {permissionType === "نص يوم" && (
                                     <div style={styles.timeRow}>
                                         <div style={styles.timeField}>
-                                            <label>من:</label>
+                                            <label style={styles.label}>من:</label>
                                             <input
                                                 type="time"
                                                 value={permissionStartTime}
@@ -1043,7 +1258,7 @@ export default function EmployeePage() {
                                             />
                                         </div>
                                         <div style={styles.timeField}>
-                                            <label>إلى:</label>
+                                            <label style={styles.label}>إلى:</label>
                                             <input
                                                 type="time"
                                                 value={permissionEndTime}
@@ -1080,12 +1295,54 @@ export default function EmployeePage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>إذن {req.permission_type}</span>
-                                            <span style={{
-                                                ...styles.statusBadge,
-                                                backgroundColor: status.color
-                                            }}>
-                                                {status.text}
-                                            </span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <p style={styles.requestDates}>التاريخ: {req.date}</p>
@@ -1119,6 +1376,77 @@ export default function EmployeePage() {
                         </div>
                     </div>
                 )}
+                {/* ========================================= */}
+                {/* تبويب الإعدادات */}
+                {/* ========================================= */}
+                {activeTab === "settings" && (
+                    <div style={styles.tabContent}>
+                        <h3 style={styles.sectionTitle}>إعدادات الحساب</h3>
+
+                        <div style={styles.settingsCard}>
+                            <h4 style={styles.settingsTitle}>تغيير كلمة المرور</h4>
+
+                            <div style={styles.inputGroup}>
+                                <label style={styles.inputLabel}>كلمة المرور الحالية</label>
+                                <input
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    placeholder="********"
+                                    style={styles.input}
+                                />
+                            </div>
+
+                            <div style={styles.inputGroup}>
+                                <label style={styles.inputLabel}>كلمة المرور الجديدة</label>
+                                <input
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    placeholder="********"
+                                    style={styles.input}
+                                />
+                                
+                            </div>
+
+                            <div style={styles.inputGroup}>
+                                <label style={styles.inputLabel}>تأكيد كلمة المرور الجديدة</label>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="********"
+                                    style={styles.input}
+                                />
+                            </div>
+
+                            {passwordMessage && (
+                                <div style={{
+                                    ...styles.messageBox,
+                                    backgroundColor: passwordMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
+                                    color: passwordMessage.type === 'success' ? '#065f46' : '#991b1b',
+                                    border: `1px solid ${passwordMessage.type === 'success' ? '#a7f3d0' : '#fecaca'}`
+                                }}>
+                                    {passwordMessage.text}
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleChangePassword}
+                                disabled={changingPassword}
+                                style={{
+                                    ...styles.saveButton,
+                                    opacity: changingPassword ? 0.7 : 1,
+                                    cursor: changingPassword ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {changingPassword ? 'جاري الحفظ...' : '💾 حفظ كلمة المرور الجديدة'}
+                            </button>
+
+                        </div>
+                    </div>
+                )}
+
 
                 {/* الفوتر */}
                 <div style={styles.footer}>
@@ -1129,25 +1457,32 @@ export default function EmployeePage() {
     )
 }
 
-// ==================== الأنماط ====================
+// ==================== الأنماط المعدلة (النص أسود) ====================
 const styles: { [key: string]: React.CSSProperties } = {
     page: {
         fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
-        color: '#000',
-        background: 'linear-gradient(to right, #0b3d91, #1976d2)',
+        background: '#f0f2f5',
         minHeight: '100vh',
         padding: 20,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'flex-start'
     },
+    // أضف هذا مع باقي الأنماط
+    label: {
+        color: '#1e293b', // أسود غامق وواضح
+        fontWeight: '600', // زيادة الوضوح
+        fontSize: 14,
+        marginBottom: 4,
+        display: 'block'
+    },
     container: {
-        background: '#fff',
-        borderRadius: 20,
-        padding: 30,
-        width: '90%',
-        maxWidth: 800,
-        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+        background: '#ffffff',
+        borderRadius: 16,
+        padding: 24,
+        width: '95%',
+        maxWidth: 1200,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
     },
     header: {
         display: 'flex',
@@ -1156,381 +1491,302 @@ const styles: { [key: string]: React.CSSProperties } = {
         marginBottom: 20
     },
     title: {
-        textAlign: 'center',
-        color: '#0b3d91',
-        margin: 0,
-        fontSize: 24
+        fontSize: 24,
+        fontWeight: '600',
+        color: '#1e293b', // أسود
+        margin: 0
     },
     logoutButton: {
-        padding: '8px 15px',
+        padding: '8px 16px',
         border: 'none',
-        borderRadius: 10,
-        backgroundColor: '#d32f2f',
-        color: '#fff',
-        fontWeight: 'bold',
+        borderRadius: 8,
+        backgroundColor: '#ef4444',
+        color: '#fff', // أبيض (ماشي)
+        fontWeight: '500',
         cursor: 'pointer'
     },
-    welcomeCard: {
-        backgroundColor: '#e3f2fd',
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 20,
-        textAlign: 'center'
+    profileCard: {
+        backgroundColor: '#3b82f6',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 24,
+        boxShadow: '0 4px 8px rgba(59, 130, 246, 0.3)'
     },
-    welcomeText: {
-        fontSize: 18,
-        color: '#0b3d91',
-        margin: 0,
+    profileHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20
+    },
+    profileAvatar: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#ffffff',
+        color: '#1e293b', // أسود
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 28,
         fontWeight: 'bold'
     },
-    hireDateText: {
+    profileInfo: {
+        flex: 1
+    },
+    profileName: {
+        fontSize: 22,
+        fontWeight: '600',
+        margin: 0,
+        marginBottom: 4,
+        color: '#ffffff' // أبيض (عشان في الكارد الأزرق)
+    },
+    profileJob: {
+        fontSize: 15,
+        margin: 0,
+        marginBottom: 8,
+        color: '#1e293b', // 🔥 أسود غامق (تعديل هنا)
+        fontWeight: '500'
+    },
+    profileDetails: {
+        display: 'flex',
+        gap: 16,
+        flexWrap: 'wrap'
+    },
+    profileDetail: {
         fontSize: 13,
-        color: '#1976d2',
-        marginTop: 5
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        padding: '4px 10px',
+        borderRadius: 16,
+        color: '#ffffff' // أبيض (عشان في الكارد الأزرق)
+    },
+    detailIcon: {
+        fontSize: 14,
+        color: '#ffffff'
     },
     tabBar: {
         display: 'flex',
-        gap: 5,
-        marginBottom: 25,
-        borderBottom: '2px solid #1976d2',
-        paddingBottom: 5,
-        flexWrap: 'wrap'
+        gap: 8,
+        marginBottom: 24,
+        flexWrap: 'wrap',
+        borderBottom: '1px solid #e2e8f0',
+        paddingBottom: 8
     },
     tabButton: {
-        padding: '8px 12px',
+        padding: '10px 16px',
         border: 'none',
+        borderRadius: 8,
         cursor: 'pointer',
-        borderRadius: '10px 10px 0 0',
-        fontWeight: 'bold',
-        fontSize: 13,
-        transition: 'all 0.3s'
+        fontWeight: '500',
+        fontSize: 14,
+        backgroundColor: '#f1f5f9',
+        color: '#1e293b' // أسود
     },
     tabContent: {
         minHeight: 400,
-        padding: '10px 0'
+        padding: '8px 0'
     },
     sectionTitle: {
-        color: '#0b3d91',
-        fontSize: 20,
-        margin: 0
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b', // أسود
+        marginBottom: 16
     },
     sectionHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 15
+        marginBottom: 16
     },
     subTitle: {
-        color: '#333',
         fontSize: 16,
-        marginBottom: 10,
-        marginTop: 10
+        fontWeight: '500',
+        color: '#1e293b', // أسود
+        marginBottom: 12,
+        marginTop: 16
     },
     attendanceCard: {
-        backgroundColor: '#f8f9fa',
-        padding: 15,
+        background: '#ffffff',
         borderRadius: 12,
-        border: '1px solid #e0e0e0'
+        padding: 20,
+        border: '1px solid #e2e8f0'
     },
     locationStatus: {
-        padding: 10,
-        backgroundColor: '#e3f2fd',
+        padding: 12,
+        backgroundColor: '#e0f2fe',
         borderRadius: 8,
-        marginBottom: 15,
-        color: '#0b3d91',
-        fontWeight: 'bold',
+        marginBottom: 16,
+        color: '#1e293b', // أسود
+        fontWeight: '500',
         textAlign: 'center',
-        fontSize: 14
+        fontSize: 14,
+        border: '1px solid #bae6fd'
     },
     buttonGroup: {
         display: 'flex',
-        gap: 10,
-        marginBottom: 20,
+        gap: 12,
+        marginBottom: 24,
         justifyContent: 'center'
     },
     checkInButton: {
-        padding: '12px 20px',
+        padding: '10px 24px',
         border: 'none',
         borderRadius: 8,
-        backgroundColor: '#4caf50',
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
+        backgroundColor: '#22c55e',
+        color: '#ffffff',
+        fontWeight: '500',
         cursor: 'pointer',
-        flex: 1,
-        maxWidth: 150
+        fontSize: 14
     },
     checkOutButton: {
-        padding: '12px 20px',
+        padding: '10px 24px',
         border: 'none',
         borderRadius: 8,
-        backgroundColor: '#f44336',
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
+        backgroundColor: '#ef4444',
+        color: '#ffffff',
+        fontWeight: '500',
         cursor: 'pointer',
-        flex: 1,
-        maxWidth: 150
+        fontSize: 14
     },
     filterSection: {
         display: 'flex',
-        gap: 8,
+        gap: 12,
         alignItems: 'center',
         flexWrap: 'wrap',
-        marginBottom: 12,
-        padding: 12,
-        backgroundColor: '#f1f3f4',
-        borderRadius: 8
+        marginBottom: 16,
+        padding: 16,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        border: '1px solid #e2e8f0'
     },
     filterRow: {
         display: 'flex',
+        gap: 12,
         alignItems: 'center',
-        gap: 5
+        flexWrap: 'wrap'
+    },
+    select: {
+        width: '100%',
+        padding: '10px 12px',
+        borderRadius: 6,
+        border: '1px solid #cbd5e1',
+        fontSize: 14,
+        minWidth: 140,
+        backgroundColor: '#ffffff',
+        color: '#000000', // 🔥 أسود غامق جداً
+        fontWeight: '400'
     },
     dateInput: {
-        padding: 6,
+        padding: '8px 12px',
         borderRadius: 6,
-        border: '1px solid #ccc',
-        fontSize: 13
+        border: '1px solid #cbd5e1',
+        fontSize: 14,
+        backgroundColor: '#ffffff',
+        color: '#000000', // 🔥 أسود غامق جداً
+        fontWeight: '400'
     },
     viewButton: {
-        padding: '6px 15px',
+        padding: '8px 16px',
         border: 'none',
         borderRadius: 6,
-        backgroundColor: '#1976d2',
-        color: '#fff',
-        fontSize: 13,
-        cursor: 'pointer'
+        backgroundColor: '#3b82f6',
+        color: '#ffffff',
+        cursor: 'pointer',
+        fontWeight: '500',
+        fontSize: 14
+    },
+    addButton: {
+        padding: '8px 16px',
+        border: 'none',
+        borderRadius: 6,
+        backgroundColor: '#22c55e',
+        color: '#ffffff',
+        cursor: 'pointer',
+        fontWeight: '500',
+        fontSize: 14
     },
     tableContainer: {
-        maxHeight: 180,
+        maxHeight: 400,
         overflowY: 'auto',
-        border: '1px solid #e0e0e0',
-        borderRadius: 8
+        border: '1px solid #e2e8f0',
+        borderRadius: 8,
+        backgroundColor: '#ffffff'
     },
     table: {
         width: '100%',
         borderCollapse: 'collapse',
-        fontSize: 13
+        fontSize: 14
     },
     tableHeader: {
-        padding: 8,
-        borderBottom: '2px solid #1976d2',
-        fontWeight: 'bold',
+        padding: 12,
+        backgroundColor: '#f8fafc',
+        fontWeight: '600',
         textAlign: 'center',
-        backgroundColor: '#f5f5f5',
+        color: '#1e293b', // أسود
+        borderBottom: '2px solid #e2e8f0',
         position: 'sticky',
         top: 0
     },
     tableCell: {
-        padding: 6,
+        padding: 10,
         textAlign: 'center',
-        borderBottom: '1px solid #eee'
+        borderBottom: '1px solid #e2e8f0',
+        color: '#1e293b' // أسود
     },
     emptyCell: {
-        padding: 15,
-        textAlign: 'center',
-        color: '#666',
-        fontSize: 13
-    },
-    addButton: {
-        padding: '6px 12px',
-        border: 'none',
-        borderRadius: 6,
-        backgroundColor: '#4caf50',
-        color: '#fff',
-        fontSize: 12,
-        cursor: 'pointer'
-    },
-    formCard: {
-        backgroundColor: '#f8f9fa',
-        padding: 15,
-        borderRadius: 12,
-        marginBottom: 15,
-        border: '1px solid #e0e0e0'
-    },
-    formTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1976d2',
-        marginBottom: 15,
-        textAlign: 'center'
-    },
-    select: {
-        width: '100%',
-        padding: 8,
-        marginBottom: 12,
-        borderRadius: 6,
-        border: '1px solid #ccc',
-        fontSize: 14
-    },
-    input: {
-        width: '100%',
-        padding: 8,
-        marginBottom: 12,
-        borderRadius: 6,
-        border: '1px solid #ccc',
-        fontSize: 14
-    },
-    textarea: {
-        width: '100%',
-        padding: 8,
-        marginBottom: 12,
-        borderRadius: 6,
-        border: '1px solid #ccc',
-        fontSize: 14,
-        fontFamily: 'inherit'
-    },
-    dateRow: {
-        display: 'flex',
-        gap: 8,
-        marginBottom: 12
-    },
-    dateField: {
-        flex: 1
-    },
-    timeRow: {
-        display: 'flex',
-        gap: 8,
-        marginBottom: 12
-    },
-    timeField: {
-        flex: 1
-    },
-    hoursField: {
-        marginBottom: 12
-    },
-    submitButton: {
-        width: '100%',
-        padding: 10,
-        border: 'none',
-        borderRadius: 6,
-        backgroundColor: '#1976d2',
-        color: '#fff',
-        fontSize: 14,
-        cursor: 'pointer'
-    },
-    requestsList: {
-        maxHeight: 350,
-        overflowY: 'auto'
-    },
-    requestCard: {
-        padding: 12,
-        border: '1px solid #e0e0e0',
-        borderRadius: 8,
-        marginBottom: 8,
-        backgroundColor: '#fff',
-        fontSize: 13
-    },
-    requestHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 6
-    },
-    requestType: {
-        fontWeight: 'bold',
-        fontSize: 14
-    },
-    statusBadge: {
-        padding: '3px 6px',
-        borderRadius: 4,
-        color: 'white',
-        fontSize: 11,
-        fontWeight: 'bold'
-    },
-    requestDates: {
-        margin: '4px 0',
-        color: '#555'
-    },
-    requestReason: {
-        margin: '4px 0',
-        color: '#666',
-        fontSize: 12
-    },
-    requestFooter: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 6
-    },
-    requestDate: {
-        fontSize: 11,
-        color: '#999'
-    },
-    deleteButton: {
-        padding: '4px 8px',
-        border: 'none',
-        borderRadius: 4,
-        backgroundColor: '#ff4444',
-        color: 'white',
-        fontSize: 11,
-        cursor: 'pointer'
-    },
-    noData: {
-        textAlign: 'center',
-        color: '#666',
         padding: 30,
-        fontSize: 13
-    },
-    correctionTimes: {
-        backgroundColor: '#f1f8e9',
-        padding: 6,
-        borderRadius: 4,
-        margin: '4px 0',
-        fontSize: 12,
-        color: '#2e7d32'
+        textAlign: 'center',
+        color: '#64748b'
     },
     balanceCard: {
-        backgroundColor: '#e8f5e8',
-        padding: 15,
-        borderRadius: 10,
+        backgroundColor: '#f0fdf4',
+        borderRadius: 12,
+        padding: 20,
         marginBottom: 20,
-        border: '1px solid #c8e6c9'
+        border: '1px solid #bbf7d0'
     },
     balanceTitle: {
-        margin: 0,
-        fontSize: 16,
-        color: '#2e7d32',
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b', // أسود
+        marginBottom: 16,
         textAlign: 'center'
     },
     balanceMessage: {
-        fontSize: 12,
-        color: '#1976d2',
+        fontSize: 13,
+        color: '#3b82f6',
         textAlign: 'center',
-        marginTop: 5,
-        marginBottom: 10
+        marginBottom: 12
     },
     balanceRow: {
         display: 'flex',
         justifyContent: 'space-around',
-        marginTop: 10
+        marginBottom: 16
     },
     balanceItem: {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 5
+        textAlign: 'center'
     },
     balanceLabel: {
-        fontSize: 12,
-        color: '#666'
+        fontSize: 13,
+        color: '#475569',
+        display: 'block',
+        marginBottom: 4
     },
     balanceValue: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333'
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#1e293b' // أسود
     },
     balanceDivider: {
-        margin: '15px 0',
-        border: '0',
-        borderTop: '1px dashed #4caf50'
+        margin: '16px 0',
+        border: 'none',
+        borderTop: '1px dashed #86efac'
     },
     emergencyRow: {
         display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        padding: '5px 0'
+        flexDirection: 'column' as 'column',
+        gap: 8
     },
     emergencyItem: {
         display: 'flex',
@@ -1539,31 +1795,258 @@ const styles: { [key: string]: React.CSSProperties } = {
     },
     emergencyLabel: {
         fontSize: 14,
-        fontWeight: 'bold',
-        color: '#ff9800'
+        fontWeight: '600',
+        color: '#b45309'
     },
     emergencyValue: {
         fontSize: 16,
-        fontWeight: 'bold',
-        color: '#ff9800'
+        fontWeight: '600',
+        color: '#b45309'
     },
     emergencyProgress: {
-        height: 8,
-        backgroundColor: '#e0e0e0',
-        borderRadius: 4,
+        height: 6,
+        backgroundColor: '#fed7aa',
+        borderRadius: 3,
         overflow: 'hidden'
     },
     emergencyProgressBar: {
         height: '100%',
-        backgroundColor: '#ff9800',
-        transition: 'width 0.3s ease'
+        backgroundColor: '#f97316',
+        transition: 'width 0.2s ease'
     },
-    footer: {
-        marginTop: 25,
-        textAlign: 'center',
-        color: '#000',
+    formCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 20,
+        border: '1px solid #e2e8f0'
+    },
+    formTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1e293b', // أسود
+        marginBottom: 16,
+        textAlign: 'center'
+    },
+    input: {
+        width: '100%',
+        padding: 10,
+        marginBottom: 12,
+        borderRadius: 6,
+        border: '1px solid #cbd5e1',
+        fontSize: 14,
+        backgroundColor: '#ffffff',
+        color: '#000000', // 🔥 أسود غامق جداً
+        fontWeight: '400'
+    },
+    textarea: {
+        width: '100%',
+        padding: 10,
+        marginBottom: 16,
+        borderRadius: 6,
+        border: '1px solid #cbd5e1',
+        fontSize: 14,
+        fontFamily: 'inherit',
+        backgroundColor: '#ffffff',
+        color: '#000000', // 🔥 أسود غامق جداً
+        fontWeight: '400'
+    },
+    dateRow: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 16
+    },
+    dateField: {
+        flex: 1
+    },
+    timeRow: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 12
+    },
+    timeField: {
+        flex: 1,
+    },
+    hoursField: {
+        marginBottom: 12
+    },
+    submitButton: {
+        width: '100%',
+        padding: 12,
+        border: 'none',
+        borderRadius: 8,
+        backgroundColor: '#3b82f6',
+        color: '#ffffff',
+        fontWeight: '600',
+        cursor: 'pointer',
+        fontSize: 14
+    },
+    requestsList: {
+        maxHeight: 400,
+        overflowY: 'auto',
+        color: '#000000'
+    },
+    requestCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 8,
+        border: '1px solid #e2e8f0',
+        color: '#000000'
+    },
+    requestHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+        color: '#000000'
+    },
+    requestType: {
+        fontWeight: '600',
+        fontSize: 14,
+        color: '#000000' // أسود غامق
+    },
+    statusBadge: {
+        padding: '4px 8px',
+        borderRadius: 4,
+        color: '#ffffff',
+        fontSize: 11,
+        fontWeight: '500'
+    },
+    requestDates: {
+        fontSize: 13,
+        color: '#000000', // أسود غامق
+        marginBottom: 4
+    },
+    requestReason: {
         fontSize: 12,
-        borderTop: '1px solid #ccc',
-        paddingTop: 15
+        color: '#000000' ,// أسود غامق
+        marginBottom: 8
+    },
+    requestFooter: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    requestDate: {
+        fontSize: 11,
+        color: '#94a3b8'
+    },
+    deleteButton: {
+        padding: '4px 8px',
+        border: 'none',
+        borderRadius: 4,
+        backgroundColor: '#ef4444',
+        color: '#ffffff',
+        fontSize: 12,
+        cursor: 'pointer'
+    },
+    noData: {
+        textAlign: 'center',
+        color: '#94a3b8',
+        padding: 40,
+        fontSize: 14
+    },
+    correctionTimes: {
+        backgroundColor: '#f1f5f9',
+        padding: 8,
+        borderRadius: 4,
+        margin: '8px 0',
+        fontSize: 12,
+        color: '#1e293b' // أسود
+    },
+    settingsCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        padding: 24,
+        maxWidth: 500,
+        margin: '0 auto',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
+    },
+    settingsTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 20,
+        textAlign: 'center'
+    },
+    inputGroup: {
+        marginBottom: 20
+    },
+    inputLabel: {
+        display: 'block',
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#334155',
+        marginBottom: 6
+    },
+    inputHint: {
+        display: 'block',
+        fontSize: 12,
+        color: '#64748b',
+        marginTop: 4
+    },
+    messageBox: {
+        padding: 12,
+        borderRadius: 6,
+        marginBottom: 20,
+        fontSize: 14,
+        textAlign: 'center'
+    },
+    saveButton: {
+        width: '100%',
+        padding: 12,
+        border: 'none',
+        borderRadius: 8,
+        backgroundColor: '#3b82f6',
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 16,
+        cursor: 'pointer',
+        transition: 'background-color 0.2s'
+    },
+    settingsNote: {
+        marginTop: 16,
+        fontSize: 13,
+        color: '#64748b',
+        textAlign: 'center',
+        borderTop: '1px solid #e2e8f0',
+        paddingTop: 16
+    },
+    // استبدل الكود ده
+    approvalContainer: {
+        display: 'flex',
+        flexDirection: 'column' as 'column',
+        gap: 8,
+        minWidth: 180
+    },
+    approvalRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '6px 12px',
+        borderRadius: 6,
+        fontSize: 12
+    },
+    approvalLabel: {
+        color: '#1e293b', // أسود غامق
+        fontWeight: '500'
+    },
+    approvalBadge: {
+        padding: '4px 8px',
+        borderRadius: 16,
+        fontSize: 11,
+        fontWeight: 'bold',
+        display: 'inline-block'
+    },
+    
+    footer: {
+        marginTop: 30,
+        textAlign: 'center',
+        color: '#64748b',
+        fontSize: 13,
+        borderTop: '1px solid #e2e8f0',
+        paddingTop: 20
     }
 }

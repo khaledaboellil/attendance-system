@@ -75,7 +75,7 @@ export default function Login() {
         localStorage.setItem("role", user.role)
         localStorage.setItem("name", user.name)
         localStorage.setItem("employee_id", user.id)
-
+        localStorage.setItem("job_title", user.job_title || "موظف")
         // حفظ في cookies (للميدل وار)
         const maxAge = rememberMe ? 2592000 : 86400 // 30 يوم أو 1 يوم
         document.cookie = `role=${user.role}; path=/; max-age=${maxAge}`
