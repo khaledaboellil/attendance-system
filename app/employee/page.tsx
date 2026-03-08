@@ -90,7 +90,7 @@ export default function EmployeePage() {
         setEmployeeUsername(storedUsername)
         setEmployeeName(storedName)
         setEmployeeId(storedId || "")
-        setJobTitle(storedJobTitle)
+        setJobTitle(storedJobTitle || "")
         fetchTodayAttendance(storedUsername)
         fetchLeaveBalance(storedId || "")
         fetchLeaveRequests(storedId || "")
