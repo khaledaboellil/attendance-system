@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
                 id,
                 manager_id,
                 department_id,
-                employees:manager_id (id, name, username, email),
+                employees:manager_id (id, name, username, email, role),
                 departments:department_id (id, name)
             `)
 
@@ -51,10 +51,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "معرف المدير والقسم مطلوب" }, { status: 400 })
         }
 
-        // التحقق من أن الموظف فعلاً مدير
+        // التحقق من أن الموظف فعلاً مدير أو Admin
         const { data: employee, error: empError } = await supabase
             .from("employees")
-            .select("role")
+            .select("role, name")
             .eq("id", manager_id)
             .single()
 
@@ -62,8 +62,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
         }
 
-        if (employee.role !== "manager") {
-            return NextResponse.json({ error: "هذا الموظف ليس مديراً" }, { status: 400 })
+        // ✅ التعديل هنا: نسمح لكل من manager و admin
+        if (employee.role !== "manager" && employee.role !== "admin") {
+            return NextResponse.json({
+                error: `هذا الموظف ليس مديراً (دوره: ${employee.role})`
+            }, { status: 400 })
         }
 
         // التحقق من عدم وجود العلاقة مسبقاً
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
                 id,
                 manager_id,
                 department_id,
-                employees:manager_id (name, username),
+                employees:manager_id (name, username, role),
                 departments:department_id (name)
             `)
             .single()
@@ -100,7 +103,7 @@ export async function POST(req: NextRequest) {
         }
 
         return NextResponse.json({
-            message: "تم إضافة المدير للقسم بنجاح",
+            message: `✅ تم إضافة ${employee.role === 'admin' ? 'الأدمن' : 'المدير'} للقسم بنجاح`,
             data
         })
     } catch (error) {

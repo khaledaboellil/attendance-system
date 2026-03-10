@@ -70,14 +70,22 @@ export default function AdminPage() {
     const [hireDate, setHireDate] = useState("")
     const [jobTitle, setJobTitle] = useState("مدير الموارد البشرية")
     const [yearsOfService, setYearsOfService] = useState(0)
+    // الأقسام التي يديرها الـ Admin (كمدير)
+    const [adminManagedDepts, setAdminManagedDepts] = useState<number[]>([])
 
     // ==================== التبويبات ====================
-    const [activeTab, setActiveTab] = useState<"dashboard" | "employees" | "departments" | "allRequests" | "reports" | "attendance" | "bulkUpload" | "settings">("dashboard")
+    const [activeTab, setActiveTab] = useState<"dashboard" | "employees" | "departments" | "allRequests" | "reports" | "attendance" | "bulkUpload" | "settings" | "leave" | "overtime" | "permission" | "correction">("dashboard")
 
     // ==================== بيانات الموظفين ====================
     const [employees, setEmployees] = useState<Employee[]>([])
     const [departments, setDepartments] = useState<Department[]>([])
     const [loading, setLoading] = useState(false)
+
+    // ==================== خاصية الترتيب ====================
+    const [sortConfig, setSortConfig] = useState<{
+        key: keyof Employee | 'department_name'
+        direction: 'asc' | 'desc'
+    } | null>(null)
 
     // ==================== إضافة موظف ====================
     const [showAddForm, setShowAddForm] = useState(false)
@@ -141,6 +149,91 @@ export default function AdminPage() {
     const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
     const [changingPassword, setChangingPassword] = useState(false)
 
+    // ==================== طلبات الإجازات ====================
+    const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
+    const [showLeaveForm, setShowLeaveForm] = useState(false)
+    const [leaveType, setLeaveType] = useState("سنوية")
+    const [leaveStart, setLeaveStart] = useState("")
+    const [leaveEnd, setLeaveEnd] = useState("")
+    const [leaveReason, setLeaveReason] = useState("")
+    const [leaveBalance, setLeaveBalance] = useState({
+        total: 0,
+        used: 0,
+        remaining: 0,
+        emergency_total: 7,
+        emergency_used: 0,
+        emergency_remaining: 7,
+        yearsOfService: 0,
+        hire_date: "",
+        message: ""
+    })
+
+    // ==================== طلبات الأوفر تايم ====================
+    const [overtimeRequests, setOvertimeRequests] = useState<any[]>([])
+    const [showOvertimeForm, setShowOvertimeForm] = useState(false)
+    const [overtimeDate, setOvertimeDate] = useState("")
+    const [overtimeHours, setOvertimeHours] = useState("")
+    const [overtimeReason, setOvertimeReason] = useState("")
+
+    // ==================== طلبات الإذن ====================
+    const [permissionRequests, setPermissionRequests] = useState<any[]>([])
+    const [showPermissionForm, setShowPermissionForm] = useState(false)
+    const [permissionType, setPermissionType] = useState("ساعة")
+    const [permissionDate, setPermissionDate] = useState("")
+    const [permissionStartTime, setPermissionStartTime] = useState("")
+    const [permissionEndTime, setPermissionEndTime] = useState("")
+    const [permissionReason, setPermissionReason] = useState("")
+
+    // ==================== طلبات تصحيح البصمة ====================
+    const [correctionRequests, setCorrectionRequests] = useState<any[]>([])
+    const [showCorrectionForm, setShowCorrectionForm] = useState(false)
+    const [correctionDate, setCorrectionDate] = useState("")
+    const [correctionCheckIn, setCorrectionCheckIn] = useState("")
+    const [correctionCheckOut, setCorrectionCheckOut] = useState("")
+    const [correctionReason, setCorrectionReason] = useState("")
+
+    // =============================================
+    // دوال الترتيب
+    // =============================================
+    const sortEmployees = (employees: Employee[]) => {
+        if (!sortConfig) return employees
+
+        return [...employees].sort((a, b) => {
+            if (sortConfig.key === 'department_name') {
+                const deptA = departments.find(d => d.id === a.department_id)?.name || ''
+                const deptB = departments.find(d => d.id === b.department_id)?.name || ''
+
+                if (deptA < deptB) return sortConfig.direction === 'asc' ? -1 : 1
+                if (deptA > deptB) return sortConfig.direction === 'asc' ? 1 : -1
+                return 0
+            }
+
+            const aValue = a[sortConfig.key as keyof Employee] || ''
+            const bValue = b[sortConfig.key as keyof Employee] || ''
+
+            if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
+            if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
+            return 0
+        })
+    }
+
+    const requestSort = (key: keyof Employee | 'department_name') => {
+        let direction: 'asc' | 'desc' = 'asc'
+
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc'
+        }
+
+        setSortConfig({ key, direction })
+    }
+
+    const getSortIcon = (key: keyof Employee | 'department_name') => {
+        if (!sortConfig || sortConfig.key !== key) {
+            return '↕️'
+        }
+        return sortConfig.direction === 'asc' ? '↑' : '↓'
+    }
+
     // =============================================
     // useEffect لتحميل البيانات
     // =============================================
@@ -167,6 +260,14 @@ export default function AdminPage() {
         fetchAllRequests()
         fetchTodayAttendance(storedUsername || "")
         fetchAdminLeaveBalance(storedId)
+        fetchAdminManagedDepts(storedId)
+
+        // جلب طلبات الأدمن الشخصية
+        fetchLeaveRequests(storedId)
+        fetchLeaveBalance(storedId)
+        fetchOvertimeRequests(storedId)
+        fetchPermissionRequests(storedId)
+        fetchCorrectionRequests(storedId)
 
         // الحصول على الموقع الجغرافي
         if (navigator.geolocation) {
@@ -185,6 +286,21 @@ export default function AdminPage() {
             setLoadingPos(false)
         }
     }, [])
+
+    // =============================================
+    // دالة جديدة: جلب الأقسام التي يديرها الـ Admin
+    // =============================================
+    const fetchAdminManagedDepts = async (managerId: string) => {
+        try {
+            const res = await fetch(`/api/departments/managers?manager_id=${managerId}`)
+            if (res.ok) {
+                const data = await res.json()
+                const deptIds = data.map((item: any) => item.department_id)
+                setAdminManagedDepts(deptIds)
+                console.log("📋 الأقسام التي يديرها الـ Admin:", deptIds)
+            }
+        } catch (err) { console.error(err) }
+    }
 
     // =============================================
     // دوال جلب البيانات
@@ -227,23 +343,18 @@ export default function AdminPage() {
         try {
             setLoading(true)
 
-            // 1️⃣ جلب طلبات الإجازات
             const leavesRes = await fetch(`/api/leave-requests?user_role=hr${requestsDept !== "all" ? `&department_id=${requestsDept}` : ""}`)
             const leaves = leavesRes.ok ? await leavesRes.json() : []
 
-            // 2️⃣ جلب طلبات الأوفر تايم
             const overtimeRes = await fetch(`/api/overtime-requests?user_role=hr${requestsDept !== "all" ? `&department_id=${requestsDept}` : ""}`)
             const overtime = overtimeRes.ok ? await overtimeRes.json() : []
 
-            // 3️⃣ جلب طلبات الإذن
             const permissionRes = await fetch(`/api/permission-requests?user_role=hr${requestsDept !== "all" ? `&department_id=${requestsDept}` : ""}`)
             const permission = permissionRes.ok ? await permissionRes.json() : []
 
-            // 4️⃣ جلب طلبات تصحيح البصمة
             const correctionRes = await fetch(`/api/attendance-correction?user_role=hr${requestsDept !== "all" ? `&department_id=${requestsDept}` : ""}`)
             const correction = correctionRes.ok ? await correctionRes.json() : []
 
-            // دمج كل الطلبات مع إضافة نوع لكل طلب
             const combined = [
                 ...leaves.map((r: any) => ({ ...r, requestType: "leave", requestTypeText: "إجازة" })),
                 ...overtime.map((r: any) => ({ ...r, requestType: "overtime", requestTypeText: "أوفر تايم" })),
@@ -251,10 +362,8 @@ export default function AdminPage() {
                 ...correction.map((r: any) => ({ ...r, requestType: "correction", requestTypeText: "تصحيح بصمة" }))
             ]
 
-            // ترتيب حسب التاريخ (الأحدث أولاً)
             combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-            // فلترة حسب الحالة
             let filtered = combined
             if (requestsFilter === "pending") {
                 filtered = combined.filter(r => r.status === "قيد الانتظار" && !(r.hr_approved && r.manager_approved))
@@ -264,12 +373,10 @@ export default function AdminPage() {
                 filtered = combined.filter(r => r.status === "مرفوضة")
             }
 
-            // فلترة حسب النوع
             if (requestsType !== "all") {
                 filtered = filtered.filter(r => r.requestType === requestsType)
             }
 
-            // فلترة حسب التاريخ
             if (requestsDateFromAll) {
                 filtered = filtered.filter(r => r.start_date >= requestsDateFromAll || r.date >= requestsDateFromAll)
             }
@@ -354,8 +461,255 @@ export default function AdminPage() {
 
     const fetchAvailableManagers = async () => {
         try {
-            const managers = employees.filter(emp => emp.role === "manager")
+            const managers = employees.filter(emp => emp.role === "manager" || emp.role === "admin")
             setAvailableManagers(managers)
+        } catch (err) { console.error(err) }
+    }
+
+    // =============================================
+    // دوال طلبات الأدمن الشخصية
+    // =============================================
+    const fetchLeaveRequests = async (empId: string) => {
+        try {
+            const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setLeaveRequests(data)
+            }
+        } catch (err) { console.error(err) }
+    }
+
+    const fetchLeaveBalance = async (empId: string) => {
+        try {
+            const res = await fetch(`/api/leave-calculator?employee_id=${empId}`)
+            const data = await res.json()
+            if (res.ok) {
+                setLeaveBalance({
+                    total: data.annual_leave_total || 0,
+                    used: data.used_days || 0,
+                    remaining: data.remaining_annual || 0,
+                    emergency_total: data.emergency_leave_total || 7,
+                    emergency_used: data.used_emergency_days || 0,
+                    emergency_remaining: data.remaining_emergency || 7,
+                    yearsOfService: data.years_of_service || 0,
+                    hire_date: data.hire_date || "",
+                    message: data.message || ""
+                })
+            }
+        } catch (err) { console.error(err) }
+    }
+
+    const fetchOvertimeRequests = async (empId: string) => {
+        try {
+            const res = await fetch(`/api/overtime-requests?employee_id=${empId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setOvertimeRequests(data)
+            }
+        } catch (err) { console.error(err) }
+    }
+
+    const fetchPermissionRequests = async (empId: string) => {
+        try {
+            const res = await fetch(`/api/permission-requests?employee_id=${empId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setPermissionRequests(data)
+            }
+        } catch (err) { console.error(err) }
+    }
+
+    const fetchCorrectionRequests = async (empId: string) => {
+        try {
+            const res = await fetch(`/api/attendance-correction?employee_id=${empId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setCorrectionRequests(data)
+            }
+        } catch (err) { console.error(err) }
+    }
+
+    // =============================================
+    // دوال تقديم طلبات الأدمن
+    // =============================================
+    const submitLeaveRequest = async () => {
+        if (!leaveStart || !leaveEnd) return alert("حدد تاريخ البداية والنهاية")
+
+        const start = new Date(leaveStart)
+        const end = new Date(leaveEnd)
+        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+        if (leaveType === "سنوية" && days > leaveBalance.remaining) {
+            return alert(`❌ لا يوجد رصيد كافٍ. المتبقي: ${leaveBalance.remaining} يوم`)
+        }
+        if (leaveType === "عارضة" && days > leaveBalance.emergency_remaining) {
+            return alert(`❌ لا يوجد رصيد كافٍ للعارضة. المتبقي: ${leaveBalance.emergency_remaining} يوم`)
+        }
+
+        const res = await fetch("/api/leave-requests", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                employee_id: adminId,
+                leave_type: leaveType,
+                start_date: leaveStart,
+                end_date: leaveEnd,
+                reason: leaveReason
+            })
+        })
+
+        const data = await res.json()
+        alert(data.message || data.error)
+        if (res.ok) {
+            setShowLeaveForm(false)
+            setLeaveStart("")
+            setLeaveEnd("")
+            setLeaveReason("")
+            fetchLeaveRequests(adminId)
+            fetchLeaveBalance(adminId)
+        }
+    }
+
+    const submitOvertimeRequest = async () => {
+        if (!overtimeDate || !overtimeHours) return alert("حدد التاريخ وعدد الساعات")
+
+        const res = await fetch("/api/overtime-requests", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                employee_id: adminId,
+                date: overtimeDate,
+                hours: parseFloat(overtimeHours),
+                reason: overtimeReason
+            })
+        })
+
+        const data = await res.json()
+        alert(data.message || data.error)
+        if (res.ok) {
+            setShowOvertimeForm(false)
+            setOvertimeDate("")
+            setOvertimeHours("")
+            setOvertimeReason("")
+            fetchOvertimeRequests(adminId)
+        }
+    }
+
+    const submitPermissionRequest = async () => {
+        if (!permissionDate || !permissionReason) return alert("حدد التاريخ والسبب")
+
+        if ((permissionType === "ساعة" || permissionType === "ساعتين") && !permissionStartTime) {
+            return alert("حدد وقت بداية الإذن")
+        }
+
+        const res = await fetch("/api/permission-requests", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                employee_id: adminId,
+                permission_type: permissionType,
+                date: permissionDate,
+                start_time: permissionStartTime || null,
+                end_time: permissionEndTime || null,
+                reason: permissionReason
+            })
+        })
+
+        const data = await res.json()
+        alert(data.message || data.error)
+        if (res.ok) {
+            setShowPermissionForm(false)
+            setPermissionType("ساعة")
+            setPermissionDate("")
+            setPermissionStartTime("")
+            setPermissionEndTime("")
+            setPermissionReason("")
+            fetchPermissionRequests(adminId)
+        }
+    }
+
+    const submitCorrectionRequest = async () => {
+        if (!correctionDate || !correctionReason) return alert("حدد التاريخ والسبب")
+
+        const res = await fetch("/api/attendance-correction", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                employee_id: adminId,
+                date: correctionDate,
+                expected_check_in: correctionCheckIn || null,
+                expected_check_out: correctionCheckOut || null,
+                reason: correctionReason
+            })
+        })
+
+        const data = await res.json()
+        alert(data.message || data.error)
+        if (res.ok) {
+            setShowCorrectionForm(false)
+            setCorrectionDate("")
+            setCorrectionCheckIn("")
+            setCorrectionCheckOut("")
+            setCorrectionReason("")
+            fetchCorrectionRequests(adminId)
+        }
+    }
+
+    // =============================================
+    // دوال حذف طلبات الأدمن
+    // =============================================
+    const deleteLeaveRequest = async (id: string) => {
+        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+
+        try {
+            const res = await fetch(`/api/leave-requests?id=${id}&employee_id=${adminId}`, {
+                method: "DELETE"
+            })
+            const data = await res.json()
+            alert(data.message || data.error)
+            if (res.ok) {
+                fetchLeaveRequests(adminId)
+                fetchLeaveBalance(adminId)
+            }
+        } catch (err) { console.error(err) }
+    }
+
+    const deleteOvertimeRequest = async (id: string) => {
+        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+
+        try {
+            const res = await fetch(`/api/overtime-requests?id=${id}&employee_id=${adminId}`, {
+                method: "DELETE"
+            })
+            const data = await res.json()
+            alert(data.message || data.error)
+            if (res.ok) fetchOvertimeRequests(adminId)
+        } catch (err) { console.error(err) }
+    }
+
+    const deletePermissionRequest = async (id: string) => {
+        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+
+        try {
+            const res = await fetch(`/api/permission-requests?id=${id}&employee_id=${adminId}`, {
+                method: "DELETE"
+            })
+            const data = await res.json()
+            alert(data.message || data.error)
+            if (res.ok) fetchPermissionRequests(adminId)
+        } catch (err) { console.error(err) }
+    }
+
+    const deleteCorrectionRequest = async (id: string) => {
+        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+
+        try {
+            const res = await fetch(`/api/attendance-correction?id=${id}&employee_id=${adminId}`, {
+                method: "DELETE"
+            })
+            const data = await res.json()
+            alert(data.message || data.error)
+            if (res.ok) fetchCorrectionRequests(adminId)
         } catch (err) { console.error(err) }
     }
 
@@ -583,14 +937,14 @@ export default function AdminPage() {
     const downloadTemplate = () => {
         const template = [
             {
-                'الاسم': "Ahmed",
-                'اسم المستخدم': '204058',
-                'كلمة المرور': '123',
+                'الاسم': "أحمد محمد",
+                'اسم المستخدم': 'ahmed123',
+                'كلمة المرور': '123456',
                 'البريد': 'ahmed@example.com',
                 'الهاتف': '0123456789',
-                'الوظيفة': 'Senior Design Engineer',
-                'القسم': 'Design',
-                'تاريخ التعيين': '2024-05-07',
+                'الوظيفة': 'مهندس',
+                'القسم': 'الهندسة',
+                'تاريخ التعيين': '2024-01-01',
                 'الدور': 'employee'
             }
         ]
@@ -733,6 +1087,15 @@ export default function AdminPage() {
             else if (req.requestType === "correction") endpoint = "/api/attendance-correction"
             else return
 
+            const employeeDeptId = req.employees?.department_id
+            const isManagerForThisEmployee = adminManagedDepts.includes(employeeDeptId)
+
+            console.log("🔍 Admin كمدير؟", {
+                employeeDeptId,
+                adminManagedDepts,
+                isManagerForThisEmployee
+            })
+
             const res = await fetch(endpoint, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -740,7 +1103,8 @@ export default function AdminPage() {
                     id: req.id,
                     action: "approve",
                     approved_by: adminId,
-                    user_role: "hr"
+                    user_role: "hr",
+                    is_admin_as_manager: isManagerForThisEmployee
                 })
             })
             const data = await res.json()
@@ -758,6 +1122,9 @@ export default function AdminPage() {
             else if (req.requestType === "correction") endpoint = "/api/attendance-correction"
             else return
 
+            const employeeDeptId = req.employees?.department_id
+            const isManagerForThisEmployee = adminManagedDepts.includes(employeeDeptId)
+
             const res = await fetch(endpoint, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -765,7 +1132,8 @@ export default function AdminPage() {
                     id: req.id,
                     action: "reject",
                     approved_by: adminId,
-                    user_role: "hr"
+                    user_role: "hr",
+                    is_admin_as_manager: isManagerForThisEmployee
                 })
             })
             const data = await res.json()
@@ -841,7 +1209,6 @@ export default function AdminPage() {
         }
     }
 
-    // تجميع سجلات الحضور (للتقرير)
     const groupedAttendance = reportType === "attendance" && reportData.length > 0
         ? reportData.reduce((acc: any, record) => {
             const employeeId = record.employee_id
@@ -875,6 +1242,8 @@ export default function AdminPage() {
         }, {})
         : {}
 
+    const sortedEmployees = sortEmployees(employees)
+
     return (
         <div style={styles.page}>
             <div style={styles.container}>
@@ -906,12 +1275,18 @@ export default function AdminPage() {
                                     <span style={styles.detailIcon}>👤</span>
                                     {adminUsername}
                                 </span>
+                                {adminManagedDepts.length > 0 && (
+                                    <span style={{ ...styles.profileDetail, backgroundColor: '#ff9800' }}>
+                                        <span style={styles.detailIcon}>👥</span>
+                                        مدير على {adminManagedDepts.length} قسم
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* شريط التبويبات - بدون attendanceReport */}
+                {/* شريط التبويبات */}
                 <div style={styles.tabBar}>
                     <button
                         onClick={() => setActiveTab("dashboard")}
@@ -956,6 +1331,30 @@ export default function AdminPage() {
                         🕒 تسجيل حضوري
                     </button>
                     <button
+                        onClick={() => setActiveTab("leave")}
+                        style={{ ...styles.tabButton, backgroundColor: activeTab === "leave" ? '#1976d2' : '#e0e0e0', color: activeTab === "leave" ? 'white' : '#333' }}
+                    >
+                        🏖️ إجازاتي
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("overtime")}
+                        style={{ ...styles.tabButton, backgroundColor: activeTab === "overtime" ? '#1976d2' : '#e0e0e0', color: activeTab === "overtime" ? 'white' : '#333' }}
+                    >
+                        ⏰ أوفر تايمي
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("permission")}
+                        style={{ ...styles.tabButton, backgroundColor: activeTab === "permission" ? '#1976d2' : '#e0e0e0', color: activeTab === "permission" ? 'white' : '#333' }}
+                    >
+                        ⏳ إذوني
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("correction")}
+                        style={{ ...styles.tabButton, backgroundColor: activeTab === "correction" ? '#1976d2' : '#e0e0e0', color: activeTab === "correction" ? 'white' : '#333' }}
+                    >
+                        🔧 تصحيح بصمتي
+                    </button>
+                    <button
                         onClick={() => setActiveTab("settings")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "settings" ? '#1976d2' : '#e0e0e0', color: activeTab === "settings" ? 'white' : '#333' }}
                     >
@@ -979,15 +1378,16 @@ export default function AdminPage() {
                                 <span style={styles.statValue}>{departments.length}</span>
                                 <span style={styles.statLabel}>الأقسام</span>
                             </div>
-                            
+                            <div style={styles.statCard}>
+                                <span style={styles.statValue}>{adminManagedDepts.length}</span>
+                                <span style={styles.statLabel}>أقسام تديرها</span>
+                            </div>
                         </div>
-
-                        
                     </div>
                 )}
 
                 {/* ========================================= */}
-                {/* تبويب الموظفين */}
+                {/* تبويب الموظفين (مع خاصية الترتيب) */}
                 {/* ========================================= */}
                 {activeTab === "employees" && (
                     <div style={styles.tabContent}>
@@ -1014,28 +1414,44 @@ export default function AdminPage() {
                                 </select>
                                 <select value={role} onChange={e => setRole(e.target.value)} style={styles.select}>
                                     <option value="employee">موظف</option>
-                                    <option value="admin">HR</option>
+                                    <option value="admin">Admin</option>
                                     <option value="manager">مدير</option>
                                 </select>
                                 <button onClick={addEmployee} style={styles.submitButton}>✅ إضافة الموظف</button>
                             </div>
                         )}
 
+                        <div style={styles.sortInfo}>
+                            <span style={styles.sortHint}>👆 اضغط على رأس العمود للترتيب</span>
+                        </div>
+
                         <div style={styles.tableContainer}>
                             <table style={styles.table}>
                                 <thead>
                                     <tr>
-                                        <th style={styles.tableHeader}>الاسم</th>
-                                        <th style={styles.tableHeader}>Username</th>
-                                        <th style={styles.tableHeader}>القسم</th>
-                                        <th style={styles.tableHeader}>الوظيفة</th>
-                                        <th style={styles.tableHeader}>تاريخ التعيين</th>
-                                        <th style={styles.tableHeader}>الدور</th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('name')}>
+                                            الاسم {getSortIcon('name')}
+                                        </th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('username')}>
+                                            اسم المستخدم {getSortIcon('username')}
+                                        </th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('department_name')}>
+                                            القسم {getSortIcon('department_name')}
+                                        </th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('job_title')}>
+                                            الوظيفة {getSortIcon('job_title')}
+                                        </th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('hire_date')}>
+                                            تاريخ التعيين {getSortIcon('hire_date')}
+                                        </th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('role')}>
+                                            الدور {getSortIcon('role')}
+                                        </th>
                                         <th style={styles.tableHeader}>الإجراءات</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {employees.map(emp => (
+                                    {sortedEmployees.map(emp => (
                                         <tr key={emp.id}>
                                             <td style={styles.tableCell}>
                                                 <input type="text" value={emp.name} onChange={e => {
@@ -1077,7 +1493,7 @@ export default function AdminPage() {
                                                     setEmployees(newEmployees)
                                                 }} style={styles.tableSelect}>
                                                     <option value="employee">موظف</option>
-                                                    <option value="admin">HR</option>
+                                                    <option value="admin">Admin</option>
                                                     <option value="manager">مدير</option>
                                                 </select>
                                             </td>
@@ -1188,7 +1604,14 @@ export default function AdminPage() {
                                                 <td style={styles.tableCell}>
                                                     {dept.managers && dept.managers.length > 0 ? (
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                            {dept.managers.map(manager => <span key={manager.id} style={styles.managerBadge}>{manager.name}</span>)}
+                                                            {dept.managers.map(manager => (
+                                                                <span key={manager.id} style={{
+                                                                    ...styles.managerBadge,
+                                                                    backgroundColor: manager.id === adminId ? '#1976d2' : '#ff9800'
+                                                                }}>
+                                                                    {manager.name} {manager.id === adminId ? '(أنت)' : ''}
+                                                                </span>
+                                                            ))}
                                                         </div>
                                                     ) : <span style={{ color: '#999' }}>لا يوجد مدراء</span>}
                                                 </td>
@@ -1213,7 +1636,10 @@ export default function AdminPage() {
                                             <h4 style={styles.modalSubTitle}>المدراء الحاليون</h4>
                                             {deptManagers.length === 0 ? <p style={styles.emptyText}>لا يوجد مدراء</p> : deptManagers.map(rel => (
                                                 <div key={rel.id} style={styles.managerRow}>
-                                                    <span>{rel.employees?.name} ({rel.employees?.username})</span>
+                                                    <span>
+                                                        {rel.employees?.name} ({rel.employees?.username})
+                                                        {rel.employees?.id === adminId && ' (أنت)'}
+                                                    </span>
                                                     <button onClick={() => removeManagerFromDept(rel.id)} style={styles.smallDeleteButton}>❌</button>
                                                 </div>
                                             ))}
@@ -1223,7 +1649,9 @@ export default function AdminPage() {
                                             <select onChange={(e) => addManagerToDept(e.target.value)} style={styles.select} value="">
                                                 <option value="">اختر مدير...</option>
                                                 {availableManagers.filter(m => !deptManagers.some((rel: any) => rel.manager_id === m.id)).map(manager => (
-                                                    <option key={manager.id} value={manager.id}>{manager.name} ({manager.username})</option>
+                                                    <option key={manager.id} value={manager.id}>
+                                                        {manager.name} ({manager.username}) {manager.role === 'admin' ? '⭐' : ''}
+                                                    </option>
                                                 ))}
                                             </select>
                                         </div>
@@ -1289,6 +1717,7 @@ export default function AdminPage() {
                                             const deptName = departments.find(d => d.id === req.employees?.department_id)?.name || "-"
                                             const status = getApprovalStatus(req)
                                             const canApprove = !req.hr_approved && req.status !== "مرفوضة"
+                                            const isAdminManagerForThisDept = adminManagedDepts.includes(req.employees?.department_id)
 
                                             let details = ""
                                             if (req.requestType === "leave") details = `${req.leave_type} - من ${req.start_date} إلى ${req.end_date}`
@@ -1351,12 +1780,19 @@ export default function AdminPage() {
                                                             </div>
                                                         )}
                                                         {req.pending_from && <div style={styles.pendingInfo}>في انتظار: {req.pending_from}</div>}
+                                                        {isAdminManagerForThisDept && !req.hr_approved && req.status === "قيد الانتظار" && (
+                                                            <div style={{ ...styles.pendingInfo, color: '#1976d2' }}>⭐ أنت مدير لهذا القسم</div>
+                                                        )}
                                                     </td>
                                                     <td style={styles.tableCell}>
                                                         {canApprove && (
                                                             <>
-                                                                <button onClick={() => approveAnyRequest(req)} style={styles.approveButton}>✓</button>
-                                                                <button onClick={() => rejectAnyRequest(req)} style={styles.rejectButton}>✗</button>
+                                                                <button onClick={() => approveAnyRequest(req)} style={styles.approveButton} title={isAdminManagerForThisDept ? "موافقة كاملة (كمدير وHR)" : "موافقة كـ HR"}>
+                                                                    ✓
+                                                                </button>
+                                                                <button onClick={() => rejectAnyRequest(req)} style={styles.rejectButton} title="رفض">
+                                                                    ✗
+                                                                </button>
                                                             </>
                                                         )}
                                                         {req.hr_approved && req.status === "قيد الانتظار" && <span style={styles.approvedBadge}>✅ وافقت HR</span>}
@@ -1397,7 +1833,6 @@ export default function AdminPage() {
                             <button onClick={fetchReport} style={styles.viewButton}>عرض التقرير</button>
                         </div>
 
-                        {/* تقرير الإجازات والغياب */}
                         {reportType !== "attendance" && (
                             <div style={styles.tableContainer}>
                                 <table style={styles.table}>
@@ -1455,7 +1890,6 @@ export default function AdminPage() {
                             </div>
                         )}
 
-                        {/* تقرير الحضور (بتفاصيل مكبرة) */}
                         {reportType === "attendance" && Object.keys(groupedAttendance).length > 0 && (
                             <div style={styles.reportSummary}>
                                 <div style={styles.summaryStats}>
@@ -1569,6 +2003,661 @@ export default function AdminPage() {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ========================================= */}
+                {/* تبويب طلبات الإجازات */}
+                {/* ========================================= */}
+                {activeTab === "leave" && (
+                    <div style={styles.tabContent}>
+                        <div style={styles.sectionHeader}>
+                            <h3 style={styles.sectionTitle}>طلبات الإجازات</h3>
+                            <button onClick={() => setShowLeaveForm(!showLeaveForm)} style={styles.addButton}>
+                                {showLeaveForm ? '❌ إلغاء' : '➕ طلب إجازة'}
+                            </button>
+                        </div>
+
+                        {/* كرت رصيد الإجازات */}
+                        <div style={styles.balanceCard}>
+                            <h4 style={styles.balanceTitle}>رصيد الإجازات</h4>
+                            {leaveBalance.message && (
+                                <p style={styles.balanceMessage}>{leaveBalance.message}</p>
+                            )}
+
+                            <div style={styles.balanceRow}>
+                                <div style={styles.balanceItem}>
+                                    <span style={styles.balanceLabel}>السنوية (إجمالي)</span>
+                                    <span style={styles.balanceValue}>{leaveBalance.total} يوم</span>
+                                </div>
+                                <div style={styles.balanceItem}>
+                                    <span style={styles.balanceLabel}>مستخدم</span>
+                                    <span style={styles.balanceValue}>{leaveBalance.used} يوم</span>
+                                </div>
+                                <div style={styles.balanceItem}>
+                                    <span style={styles.balanceLabel}>المتبقي</span>
+                                    <span style={{
+                                        ...styles.balanceValue,
+                                        color: leaveBalance.remaining > 0 ? '#4caf50' : '#f44336',
+                                        fontWeight: 'bold'
+                                    }}>
+                                        {leaveBalance.remaining} يوم
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* خط فاصل */}
+                            <hr style={styles.balanceDivider} />
+
+                            {/* رصيد الإجازة العارضة */}
+                            <div style={styles.emergencyRow}>
+                                <div style={styles.emergencyItem}>
+                                    <span style={styles.emergencyLabel}>إجازة عارضة</span>
+                                    <span style={styles.emergencyValue}>
+                                        {leaveBalance.emergency_remaining} / {leaveBalance.emergency_total} يوم
+                                    </span>
+                                </div>
+                                <div style={styles.emergencyProgress}>
+                                    <div style={{
+                                        ...styles.emergencyProgressBar,
+                                        width: `${(leaveBalance.emergency_used / leaveBalance.emergency_total) * 100}%`
+                                    }} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* نموذج إضافة طلب إجازة */}
+                        {showLeaveForm && (
+                            <div style={styles.formCard}>
+                                <h4 style={styles.formTitle}>طلب إجازة جديد</h4>
+
+                                <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={styles.select}>
+                                    <option value="سنوية">إجازة سنوية</option>
+                                    <option value="مرضية">إجازة مرضية</option>
+                                    <option value="عارضة">إجازة عارضة</option>
+                                    <option value="غير مدفوعة">إجازة غير مدفوعة</option>
+                                </select>
+
+                                <div style={styles.dateRow}>
+                                    <div style={styles.dateField}>
+                                        <label style={styles.label}>من:</label>
+                                        <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} style={styles.dateInput} />
+                                    </div>
+                                    <div style={styles.dateField}>
+                                        <label style={styles.label}>إلى:</label>
+                                        <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} style={styles.dateInput} />
+                                    </div>
+                                </div>
+
+                                <textarea
+                                    placeholder="السبب (اختياري)"
+                                    value={leaveReason}
+                                    onChange={e => setLeaveReason(e.target.value)}
+                                    style={styles.textarea}
+                                    rows={3}
+                                />
+
+                                <button onClick={submitLeaveRequest} style={styles.submitButton}>
+                                    ✅ تقديم الطلب
+                                </button>
+                            </div>
+                        )}
+
+                        {/* قائمة طلبات الإجازات السابقة */}
+                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <div style={styles.requestsList}>
+                            {leaveRequests.length === 0 && !showLeaveForm && (
+                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                            )}
+                            {leaveRequests.map(req => {
+                                const status = getApprovalStatus(req)
+                                return (
+                                    <div key={req.id} style={styles.requestCard}>
+                                        <div style={styles.requestHeader}>
+                                            <span style={styles.requestType}>{req.leave_type}</span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <p style={styles.requestDates}>
+                                            من {formatDate(req.start_date)} إلى {formatDate(req.end_date)}
+                                        </p>
+
+                                        {req.reason && <p style={styles.requestReason}>السبب: {req.reason}</p>}
+
+                                        <div style={styles.requestFooter}>
+                                            <span style={styles.requestDate}>
+                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                            </span>
+                                            {req.status === "قيد الانتظار" && (
+                                                <button
+                                                    onClick={() => deleteLeaveRequest(req.id)}
+                                                    style={styles.deleteButton}
+                                                >
+                                                    🗑️ حذف
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* ========================================= */}
+                {/* تبويب طلبات الأوفر تايم */}
+                {/* ========================================= */}
+                {activeTab === "overtime" && (
+                    <div style={styles.tabContent}>
+                        <div style={styles.sectionHeader}>
+                            <h3 style={styles.sectionTitle}>طلبات الأوفر تايم</h3>
+                            <button onClick={() => setShowOvertimeForm(!showOvertimeForm)} style={styles.addButton}>
+                                {showOvertimeForm ? '❌ إلغاء' : '➕ طلب أوفر تايم'}
+                            </button>
+                        </div>
+
+                        {showOvertimeForm && (
+                            <div style={styles.formCard}>
+                                <h4 style={styles.formTitle}>طلب أوفر تايم جديد</h4>
+
+                                <div style={styles.dateField}>
+                                    <label style={styles.label}>التاريخ:</label>
+                                    <input type="date" value={overtimeDate} onChange={e => setOvertimeDate(e.target.value)} style={styles.dateInput} />
+                                </div>
+
+                                <div style={styles.hoursField}>
+                                    <label style={styles.label}>عدد الساعات:</label>
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0.5"
+                                        max="12"
+                                        value={overtimeHours}
+                                        onChange={e => setOvertimeHours(e.target.value)}
+                                        style={styles.input}
+                                        placeholder="مثال: 2.5"
+                                    />
+                                </div>
+
+                                <textarea
+                                    placeholder="السبب (اختياري)"
+                                    value={overtimeReason}
+                                    onChange={e => setOvertimeReason(e.target.value)}
+                                    style={styles.textarea}
+                                    rows={3}
+                                />
+
+                                <button onClick={submitOvertimeRequest} style={styles.submitButton}>
+                                    ✅ تقديم الطلب
+                                </button>
+                            </div>
+                        )}
+
+                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <div style={styles.requestsList}>
+                            {overtimeRequests.length === 0 && !showOvertimeForm && (
+                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                            )}
+                            {overtimeRequests.map(req => {
+                                const status = getApprovalStatus(req)
+                                return (
+                                    <div key={req.id} style={styles.requestCard}>
+                                        <div style={styles.requestHeader}>
+                                            <span style={styles.requestType}>أوفر تايم</span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <p style={styles.requestDates}>التاريخ: {req.date}</p>
+                                        <p style={styles.requestReason}>عدد الساعات: {req.hours} ساعة</p>
+                                        {req.reason && <p style={styles.requestReason}>السبب: {req.reason}</p>}
+
+                                        <div style={styles.requestFooter}>
+                                            <span style={styles.requestDate}>
+                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                            </span>
+                                            {req.status === "قيد الانتظار" && (
+                                                <button
+                                                    onClick={() => deleteOvertimeRequest(req.id)}
+                                                    style={styles.deleteButton}
+                                                >
+                                                    🗑️ حذف
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* ========================================= */}
+                {/* تبويب طلبات الإذن */}
+                {/* ========================================= */}
+                {activeTab === "permission" && (
+                    <div style={styles.tabContent}>
+                        <div style={styles.sectionHeader}>
+                            <h3 style={styles.sectionTitle}>طلبات الإذن</h3>
+                            <button onClick={() => setShowPermissionForm(!showPermissionForm)} style={styles.addButton}>
+                                {showPermissionForm ? '❌ إلغاء' : '➕ طلب إذن'}
+                            </button>
+                        </div>
+
+                        {showPermissionForm && (
+                            <div style={styles.formCard}>
+                                <h4 style={styles.formTitle}>طلب إذن</h4>
+
+                                <select
+                                    value={permissionType}
+                                    onChange={e => setPermissionType(e.target.value)}
+                                    style={styles.select}
+                                >
+                                    <option value="ساعة">إذن ساعة</option>
+                                    <option value="ساعتين">إذن ساعتين</option>
+                                    <option value="نص يوم">إذن نص يوم</option>
+                                </select>
+
+                                <div style={styles.dateField}>
+                                    <label style={styles.label}>التاريخ:</label>
+                                    <input
+                                        type="date"
+                                        value={permissionDate}
+                                        onChange={e => setPermissionDate(e.target.value)}
+                                        style={styles.dateInput}
+                                    />
+                                </div>
+
+                                {(permissionType === "ساعة" || permissionType === "ساعتين") && (
+                                    <div style={styles.timeField}>
+                                        <label style={styles.label}>وقت بداية الإذن:</label>
+                                        <input
+                                            type="time"
+                                            value={permissionStartTime}
+                                            onChange={e => setPermissionStartTime(e.target.value)}
+                                            style={styles.input}
+                                        />
+                                    </div>
+                                )}
+
+                                {permissionType === "نص يوم" && (
+                                    <div style={styles.timeRow}>
+                                        <div style={styles.timeField}>
+                                            <label style={styles.label}>من:</label>
+                                            <input
+                                                type="time"
+                                                value={permissionStartTime}
+                                                onChange={e => setPermissionStartTime(e.target.value)}
+                                                style={styles.input}
+                                            />
+                                        </div>
+                                        <div style={styles.timeField}>
+                                            <label style={styles.label}>إلى:</label>
+                                            <input
+                                                type="time"
+                                                value={permissionEndTime}
+                                                onChange={e => setPermissionEndTime(e.target.value)}
+                                                style={styles.input}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <textarea
+                                    placeholder="سبب طلب الإذن"
+                                    value={permissionReason}
+                                    onChange={e => setPermissionReason(e.target.value)}
+                                    style={styles.textarea}
+                                    rows={3}
+                                    required
+                                />
+
+                                <button onClick={submitPermissionRequest} style={styles.submitButton}>
+                                    ✅ تقديم الطلب
+                                </button>
+                            </div>
+                        )}
+
+                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <div style={styles.requestsList}>
+                            {permissionRequests.length === 0 && !showPermissionForm && (
+                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                            )}
+                            {permissionRequests.map(req => {
+                                const status = getApprovalStatus(req)
+                                return (
+                                    <div key={req.id} style={styles.requestCard}>
+                                        <div style={styles.requestHeader}>
+                                            <span style={styles.requestType}>إذن {req.permission_type}</span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <p style={styles.requestDates}>التاريخ: {req.date}</p>
+
+                                        {req.start_time && (
+                                            <p style={styles.requestReason}>
+                                                {req.permission_type === "نص يوم"
+                                                    ? `من ${req.start_time} إلى ${req.end_time || "?"}`
+                                                    : `بداية من ${req.start_time}`}
+                                            </p>
+                                        )}
+
+                                        <p style={styles.requestReason}>السبب: {req.reason}</p>
+
+                                        <div style={styles.requestFooter}>
+                                            <span style={styles.requestDate}>
+                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                            </span>
+                                            {req.status === "قيد الانتظار" && (
+                                                <button
+                                                    onClick={() => deletePermissionRequest(req.id)}
+                                                    style={styles.deleteButton}
+                                                >
+                                                    🗑️ حذف
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* ========================================= */}
+                {/* تبويب طلبات تصحيح البصمة */}
+                {/* ========================================= */}
+                {activeTab === "correction" && (
+                    <div style={styles.tabContent}>
+                        <div style={styles.sectionHeader}>
+                            <h3 style={styles.sectionTitle}>طلبات تصحيح البصمة</h3>
+                            <button onClick={() => setShowCorrectionForm(!showCorrectionForm)} style={styles.addButton}>
+                                {showCorrectionForm ? '❌ إلغاء' : '➕ طلب تصحيح'}
+                            </button>
+                        </div>
+
+                        {showCorrectionForm && (
+                            <div style={styles.formCard}>
+                                <h4 style={styles.formTitle}>طلب تصحيح بصمة</h4>
+
+                                <div style={styles.dateField}>
+                                    <label style={styles.label}>التاريخ المطلوب تصحيحه:</label>
+                                    <input
+                                        type="date"
+                                        value={correctionDate}
+                                        onChange={e => setCorrectionDate(e.target.value)}
+                                        style={styles.input}
+                                        max={new Date().toISOString().split('T')[0]}
+                                    />
+                                </div>
+
+                                <div style={styles.timeRow}>
+                                    <div style={styles.timeField}>
+                                        <label style={styles.label}>وقت الحضور المفترض (اختياري):</label>
+                                        <input
+                                            type="time"
+                                            value={correctionCheckIn}
+                                            onChange={e => setCorrectionCheckIn(e.target.value)}
+                                            style={styles.input}
+                                        />
+                                    </div>
+                                    <div style={styles.timeField}>
+                                        <label style={styles.label}>وقت الانصراف المفترض (اختياري):</label>
+                                        <input
+                                            type="time"
+                                            value={correctionCheckOut}
+                                            onChange={e => setCorrectionCheckOut(e.target.value)}
+                                            style={styles.input}
+                                        />
+                                    </div>
+                                </div>
+
+                                <textarea
+                                    placeholder="سبب طلب التصحيح"
+                                    value={correctionReason}
+                                    onChange={e => setCorrectionReason(e.target.value)}
+                                    style={styles.textarea}
+                                    rows={3}
+                                    required
+                                />
+
+                                <button onClick={submitCorrectionRequest} style={styles.submitButton}>
+                                    ✅ تقديم الطلب
+                                </button>
+                            </div>
+                        )}
+
+                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <div style={styles.requestsList}>
+                            {correctionRequests.length === 0 && !showCorrectionForm && (
+                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                            )}
+                            {correctionRequests.map(req => {
+                                const status = getApprovalStatus(req)
+                                return (
+                                    <div key={req.id} style={styles.requestCard}>
+                                        <div style={styles.requestHeader}>
+                                            <span style={styles.requestType}>تصحيح يوم {req.date}</span>
+                                            {req.status === "مرفوضة" ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#ffebee',
+                                                    color: '#f44336',
+                                                    border: '1px solid #f44336'
+                                                }}>
+                                                    ❌ مرفوضة
+                                                </span>
+                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                <span style={{
+                                                    ...styles.approvalBadge,
+                                                    backgroundColor: '#e8f5e9',
+                                                    color: '#2e7d32',
+                                                    border: '1px solid #4caf50'
+                                                }}>
+                                                    ✅ معتمدة
+                                                </span>
+                                            ) : (
+                                                <div style={styles.approvalContainer}>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>HR</span>
+                                                        <span style={{
+                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.hr_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{
+                                                        ...styles.approvalRow,
+                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
+                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
+                                                    }}>
+                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={{
+                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {req.manager_approved ? '✅' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {(req.expected_check_in || req.expected_check_out) && (
+                                            <div style={styles.correctionTimes}>
+                                                {req.expected_check_in && (
+                                                    <p>⏰ الحضور المفترض: {req.expected_check_in}</p>
+                                                )}
+                                                {req.expected_check_out && (
+                                                    <p>⌛ الانصراف المفترض: {req.expected_check_out}</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <p style={styles.requestReason}>السبب: {req.reason}</p>
+
+                                        <div style={styles.requestFooter}>
+                                            <span style={styles.requestDate}>
+                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                            </span>
+                                            {req.status === "قيد الانتظار" && (
+                                                <button
+                                                    onClick={() => deleteCorrectionRequest(req.id)}
+                                                    style={styles.deleteButton}
+                                                >
+                                                    🗑️ حذف
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
                         </div>
                     </div>
                 )}
@@ -1854,7 +2943,9 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#1e293b',
         borderBottom: '2px solid #e2e8f0',
         position: 'sticky',
-        top: 0
+        top: 0,
+        cursor: 'pointer',
+        userSelect: 'none'
     },
     tableCell: {
         padding: 10,
@@ -2279,12 +3370,23 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: 'pointer',
         transition: 'background-color 0.2s'
     },
-    // أنماط الموافقات
     approvalBadge: {
         padding: '4px 8px',
         borderRadius: 16,
         fontSize: 11,
         fontWeight: 'bold',
+        display: 'inline-block'
+    },
+    sortInfo: {
+        marginBottom: 10,
+        textAlign: 'left',
+        fontSize: 12,
+        color: '#666'
+    },
+    sortHint: {
+        backgroundColor: '#e3f2fd',
+        padding: '4px 12px',
+        borderRadius: 16,
         display: 'inline-block'
     },
     footer: {
@@ -2294,5 +3396,191 @@ const styles: { [key: string]: React.CSSProperties } = {
         fontSize: 13,
         borderTop: '1px solid #e2e8f0',
         paddingTop: 20
+    },
+    label: {
+        color: '#1e293b',
+        fontWeight: '600',
+        fontSize: 14,
+        marginBottom: 4,
+        display: 'block'
+    },
+    dateRow: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 16
+    },
+    dateField: {
+        flex: 1
+    },
+    timeRow: {
+        display: 'flex',
+        gap: 12,
+        marginBottom: 12
+    },
+    timeField: {
+        flex: 1
+    },
+    hoursField: {
+        marginBottom: 12
+    },
+    textarea: {
+        width: '100%',
+        padding: 10,
+        marginBottom: 16,
+        borderRadius: 6,
+        border: '1px solid #cbd5e1',
+        fontSize: 14,
+        fontFamily: 'inherit',
+        backgroundColor: '#ffffff',
+        color: '#1e293b',
+        outline: 'none',
+        resize: 'vertical'
+    },
+    requestCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 8,
+        border: '1px solid #e2e8f0'
+    },
+    requestHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8
+    },
+    requestType: {
+        fontWeight: '600',
+        fontSize: 14,
+        color: '#1e293b'
+    },
+    requestDates: {
+        fontSize: 13,
+        color: '#475569',
+        marginBottom: 4
+    },
+    requestReason: {
+        fontSize: 12,
+        color: '#64748b',
+        marginBottom: 8
+    },
+    requestFooter: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 12,
+        paddingTop: 8,
+        borderTop: '1px dashed #e2e8f0'
+    },
+    requestDate: {
+        fontSize: 11,
+        color: '#94a3b8'
+    },
+    noData: {
+        textAlign: 'center',
+        color: '#94a3b8',
+        padding: 40,
+        fontSize: 14
+    },
+    correctionTimes: {
+        backgroundColor: '#f1f5f9',
+        padding: 8,
+        borderRadius: 4,
+        margin: '8px 0',
+        fontSize: 12,
+        color: '#1e293b'
+    },
+    balanceCard: {
+        backgroundColor: '#f0fdf4',
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 20,
+        border: '1px solid #bbf7d0'
+    },
+    balanceTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 16,
+        textAlign: 'center'
+    },
+    balanceMessage: {
+        fontSize: 13,
+        color: '#3b82f6',
+        textAlign: 'center',
+        marginBottom: 12
+    },
+    balanceRow: {
+        display: 'flex',
+        justifyContent: 'space-around',
+        marginBottom: 16
+    },
+    balanceItem: {
+        textAlign: 'center'
+    },
+    balanceLabel: {
+        fontSize: 13,
+        color: '#475569',
+        display: 'block',
+        marginBottom: 4
+    },
+    balanceValue: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#1e293b'
+    },
+    balanceDivider: {
+        margin: '16px 0',
+        border: 'none',
+        borderTop: '1px dashed #86efac'
+    },
+    emergencyRow: {
+        display: 'flex',
+        flexDirection: 'column' as 'column',
+        gap: 8
+    },
+    emergencyItem: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    emergencyLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#b45309'
+    },
+    emergencyValue: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#b45309'
+    },
+    emergencyProgress: {
+        height: 6,
+        backgroundColor: '#fed7aa',
+        borderRadius: 3,
+        overflow: 'hidden'
+    },
+    emergencyProgressBar: {
+        height: '100%',
+        backgroundColor: '#f97316',
+        transition: 'width 0.2s ease'
+    },
+    approvalContainer: {
+        display: 'flex',
+        flexDirection: 'column' as 'column',
+        gap: 8,
+        minWidth: 180
+    },
+    approvalRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '6px 12px',
+        borderRadius: 6,
+        fontSize: 12
+    },
+    approvalLabel: {
+        color: '#1e293b',
+        fontWeight: '500'
     }
 }

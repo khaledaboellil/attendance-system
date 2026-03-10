@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const employee_id = searchParams.get("employee_id")
         const department_id = searchParams.get("department_id")
+        const department_ids = searchParams.get("department_ids")
         const status = searchParams.get("status")
         const user_role = searchParams.get("user_role")
         const user_id = searchParams.get("user_id")
@@ -29,7 +30,22 @@ export async function GET(req: NextRequest) {
             query = query.eq("employee_id", employee_id)
         }
 
-        if (user_role === "manager" && user_id) {
+        if (department_ids) {
+            const deptIds = department_ids.split(',').map(Number)
+            const { data: deptEmployees } = await supabase
+                .from("employees")
+                .select("id")
+                .in("department_id", deptIds)
+
+            const empIds = deptEmployees?.map(e => e.id) || []
+            if (empIds.length > 0) {
+                query = query.in("employee_id", empIds)
+            } else {
+                return NextResponse.json([])
+            }
+        }
+
+        if (user_role === "manager" && user_id && !department_ids) {
             const { data: managedDepts } = await supabase
                 .from("manager_departments")
                 .select("department_id")
@@ -120,7 +136,9 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
     try {
-        const { id, action, approved_by, user_role } = await req.json()
+        const { id, action, approved_by, user_role, is_admin_as_manager } = await req.json()
+
+        console.log("📝 معالجة طلب إذن:", { id, action, approved_by, user_role, is_admin_as_manager })
 
         if (!id || !action || !approved_by || !user_role) {
             return NextResponse.json({ error: "البيانات غير كاملة" }, { status: 400 })
@@ -155,7 +173,16 @@ export async function PATCH(req: NextRequest) {
 
         let updateData: any = { updated_at: new Date() }
 
-        if (user_role === "hr") {
+        // الحالة الخاصة: Admin هو مدير على القسم
+        if (is_admin_as_manager && user_role === "hr") {
+            console.log("🎯 Admin كمدير - موافقة كاملة فورية")
+            updateData.hr_approved = true
+            updateData.hr_approved_by = approved_by
+            updateData.manager_approved = true
+            updateData.manager_approved_by = approved_by
+            updateData.status = "تمت الموافقة"
+        }
+        else if (user_role === "hr") {
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
 
@@ -182,9 +209,18 @@ export async function PATCH(req: NextRequest) {
 
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-        let message = user_role === "hr"
-            ? (request.manager_approved ? "✅ تمت الموافقة" : "✅ موافقة HR، في انتظار مدير")
-            : (request.hr_approved ? "✅ تمت الموافقة" : "✅ موافقة مدير، في انتظار HR")
+        let message = ""
+        if (is_admin_as_manager) {
+            message = "✅ تمت الموافقة (كـ Admin ومدير) والطلب معتمد الآن"
+        } else if (user_role === "hr") {
+            message = request.manager_approved
+                ? "✅ تمت الموافقة"
+                : "✅ موافقة HR، في انتظار مدير"
+        } else {
+            message = request.hr_approved
+                ? "✅ تمت الموافقة"
+                : "✅ موافقة مدير، في انتظار HR"
+        }
 
         return NextResponse.json({ message })
     } catch {

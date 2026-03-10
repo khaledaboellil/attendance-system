@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const employee_id = searchParams.get("employee_id")
         const department_id = searchParams.get("department_id")
+        const department_ids = searchParams.get("department_ids")
         const status = searchParams.get("status")
         const user_role = searchParams.get("user_role")
         const user_id = searchParams.get("user_id")
@@ -30,7 +31,22 @@ export async function GET(req: NextRequest) {
             query = query.eq("employee_id", employee_id)
         }
 
-        if (user_role === "manager" && user_id) {
+        if (department_ids) {
+            const deptIds = department_ids.split(',').map(Number)
+            const { data: deptEmployees } = await supabase
+                .from("employees")
+                .select("id")
+                .in("department_id", deptIds)
+
+            const empIds = deptEmployees?.map(e => e.id) || []
+            if (empIds.length > 0) {
+                query = query.in("employee_id", empIds)
+            } else {
+                return NextResponse.json([])
+            }
+        }
+
+        if (user_role === "manager" && user_id && !department_ids) {
             const { data: managedDepts } = await supabase
                 .from("manager_departments")
                 .select("department_id")
@@ -130,15 +146,14 @@ export async function POST(req: NextRequest) {
 // PATCH: الموافقة على طلب تصحيح بصمة (مع تحديث الحضور)
 export async function PATCH(req: NextRequest) {
     try {
-        const { id, action, approved_by, user_role } = await req.json()
+        const { id, action, approved_by, user_role, is_admin_as_manager } = await req.json()
 
-        console.log("📝 بدء معالجة طلب تصحيح:", { id, action, approved_by, user_role })
+        console.log("📝 معالجة طلب تصحيح:", { id, action, approved_by, user_role, is_admin_as_manager })
 
         if (!id || !action || !approved_by || !user_role) {
             return NextResponse.json({ error: "البيانات غير كاملة" }, { status: 400 })
         }
 
-        // جلب الطلب الحالي
         const { data: request, error: fetchError } = await supabase
             .from("attendance_correction_requests")
             .select(`*, employees:employee_id (id, name)`)
@@ -155,7 +170,6 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ error: "لا يمكن تعديل طلب منتهي" }, { status: 400 })
         }
 
-        // ============= حالة الرفض =============
         if (action === "reject") {
             console.log("❌ رفض الطلب")
             const { error } = await supabase
@@ -170,32 +184,19 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ message: "تم رفض الطلب" })
         }
 
-        // ============= حالة الموافقة =============
         let updateData: any = { updated_at: new Date() }
 
-        if (user_role === "hr") {
+        // الحالة الخاصة: Admin هو مدير على القسم
+        if (is_admin_as_manager && user_role === "hr") {
+            console.log("🎯 Admin كمدير - موافقة كاملة فورية")
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
-            console.log("✅ موافقة HR")
-        } else if (user_role === "manager") {
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
-            console.log("✅ موافقة مدير")
-        } else {
-            return NextResponse.json({ error: "صلاحية غير صحيحة" }, { status: 400 })
-        }
-
-        const newHrStatus = user_role === "hr" ? true : request.hr_approved
-        const newManagerStatus = user_role === "manager" ? true : request.manager_approved
-
-        console.log("📊 حالة الموافقات:", { newHrStatus, newManagerStatus })
-
-        // إذا اكتملت الموافقات (HR + مدير)
-        if (newHrStatus && newManagerStatus) {
-            console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
             updateData.status = "تمت الموافقة"
 
-            // ============= تحديث جدول الحضور =============
+            // تحديث جدول الحضور مباشرة
+            console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
             const employeeId = request.employee_id
             const targetDate = request.date
 
@@ -204,7 +205,6 @@ export async function PATCH(req: NextRequest) {
             console.log("⏰ وقت الحضور المفترض:", request.expected_check_in)
             console.log("⏰ وقت الانصراف المفترض:", request.expected_check_out)
 
-            // 1️⃣ نبحث عن سجل حضور في هذا اليوم
             const { data: existingAttendance, error: searchError } = await supabase
                 .from("attendance")
                 .select("*")
@@ -214,20 +214,17 @@ export async function PATCH(req: NextRequest) {
 
             console.log("🔍 سجل الحضور الموجود:", existingAttendance)
 
-            // تجهيز بيانات التحديث
             const attendanceData: any = {
                 employee_id: employeeId,
                 day: targetDate
             }
 
-            // إذا كان الطلب يحتوي على وقت حضور
             if (request.expected_check_in) {
                 const checkInDateTime = `${targetDate}T${request.expected_check_in}`
                 console.log("🕒 وقت الحضور المراد:", checkInDateTime)
                 attendanceData.check_in = checkInDateTime
             }
 
-            // إذا كان الطلب يحتوي على وقت انصراف
             if (request.expected_check_out) {
                 const checkOutDateTime = `${targetDate}T${request.expected_check_out}`
                 console.log("🕒 وقت الانصراف المراد:", checkOutDateTime)
@@ -257,9 +254,95 @@ export async function PATCH(req: NextRequest) {
                 console.log("✅ تم تحديث الحضور بنجاح")
             }
         }
+        else if (user_role === "hr") {
+            updateData.hr_approved = true
+            updateData.hr_approved_by = approved_by
+            console.log("✅ موافقة HR")
 
-        // تحديث حالة الطلب
-        console.log("💾 تحديث حالة الطلب:", updateData)
+            if (request.manager_approved) {
+                updateData.status = "تمت الموافقة"
+                console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
+
+                const employeeId = request.employee_id
+                const targetDate = request.date
+
+                const { data: existingAttendance } = await supabase
+                    .from("attendance")
+                    .select("*")
+                    .eq("employee_id", employeeId)
+                    .eq("day", targetDate)
+                    .maybeSingle()
+
+                const attendanceData: any = {
+                    employee_id: employeeId,
+                    day: targetDate
+                }
+
+                if (request.expected_check_in) {
+                    attendanceData.check_in = `${targetDate}T${request.expected_check_in}`
+                }
+                if (request.expected_check_out) {
+                    attendanceData.check_out = `${targetDate}T${request.expected_check_out}`
+                }
+
+                if (existingAttendance) {
+                    await supabase
+                        .from("attendance")
+                        .update(attendanceData)
+                        .eq("id", existingAttendance.id)
+                } else {
+                    await supabase
+                        .from("attendance")
+                        .insert([attendanceData])
+                }
+            }
+        }
+        else if (user_role === "manager") {
+            updateData.manager_approved = true
+            updateData.manager_approved_by = approved_by
+            console.log("✅ موافقة مدير")
+
+            if (request.hr_approved) {
+                updateData.status = "تمت الموافقة"
+                console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
+
+                const employeeId = request.employee_id
+                const targetDate = request.date
+
+                const { data: existingAttendance } = await supabase
+                    .from("attendance")
+                    .select("*")
+                    .eq("employee_id", employeeId)
+                    .eq("day", targetDate)
+                    .maybeSingle()
+
+                const attendanceData: any = {
+                    employee_id: employeeId,
+                    day: targetDate
+                }
+
+                if (request.expected_check_in) {
+                    attendanceData.check_in = `${targetDate}T${request.expected_check_in}`
+                }
+                if (request.expected_check_out) {
+                    attendanceData.check_out = `${targetDate}T${request.expected_check_out}`
+                }
+
+                if (existingAttendance) {
+                    await supabase
+                        .from("attendance")
+                        .update(attendanceData)
+                        .eq("id", existingAttendance.id)
+                } else {
+                    await supabase
+                        .from("attendance")
+                        .insert([attendanceData])
+                }
+            }
+        }
+        else {
+            return NextResponse.json({ error: "صلاحية غير صحيحة" }, { status: 400 })
+        }
 
         const { error } = await supabase
             .from("attendance_correction_requests")
@@ -272,12 +355,14 @@ export async function PATCH(req: NextRequest) {
         }
 
         let message = ""
-        if (user_role === "hr") {
-            message = newManagerStatus
+        if (is_admin_as_manager) {
+            message = "✅ تمت الموافقة على طلب التصحيح (كـ Admin ومدير) وتحديث الحضور"
+        } else if (user_role === "hr") {
+            message = request.manager_approved
                 ? "✅ تمت الموافقة على طلب التصحيح وتحديث الحضور"
                 : "✅ تمت موافقة HR، في انتظار موافقة مدير"
         } else {
-            message = newHrStatus
+            message = request.hr_approved
                 ? "✅ تمت الموافقة على طلب التصحيح وتحديث الحضور"
                 : "✅ تمت موافقة مدير، في انتظار موافقة HR"
         }
