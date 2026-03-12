@@ -1,6 +1,8 @@
 ﻿"use client"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useLanguage } from '@/context/LanguageContext'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
 
 type LeaveRequest = {
     id: string
@@ -23,15 +25,82 @@ type LeaveRequest = {
     pending_from?: string
 }
 
+type OvertimeRequest = {
+    id: string
+    employee_id: string
+    employees?: {
+        id: string
+        name: string
+        username: string
+        department_id?: number
+    }
+    date: string
+    hours: number
+    reason?: string
+    hr_approved: boolean
+    manager_approved: boolean
+    status: string
+    created_at: string
+}
+
+type PermissionRequest = {
+    id: string
+    employee_id: string
+    employees?: {
+        id: string
+        name: string
+        username: string
+        department_id?: number
+    }
+    permission_type: string
+    date: string
+    start_time?: string
+    end_time?: string
+    reason: string
+    hr_approved: boolean
+    manager_approved: boolean
+    status: string
+    created_at: string
+}
+
+type CorrectionRequest = {
+    id: string
+    employee_id: string
+    employees?: {
+        id: string
+        name: string
+        username: string
+        department_id?: number
+    }
+    date: string
+    expected_check_in?: string
+    expected_check_out?: string
+    reason: string
+    hr_approved: boolean
+    manager_approved: boolean
+    status: string
+    created_at: string
+}
+
 type Department = {
     id: number
     name: string
 }
 
+type AttendanceRecord = {
+    id: string
+    employee_id: string
+    day: string
+    check_in: string | null
+    check_out: string | null
+    location?: string
+}
+
 export default function ManagerPage() {
     const router = useRouter()
+    const { t, language, dir } = useLanguage()
 
-    // ==================== بيانات المدير ====================
+    // ==================== Manager Data ====================
     const [managerName, setManagerName] = useState("")
     const [managerUsername, setManagerUsername] = useState("")
     const [managerId, setManagerId] = useState("")
@@ -39,19 +108,19 @@ export default function ManagerPage() {
     const [jobTitle, setJobTitle] = useState("")
     const [managedDepts, setManagedDepts] = useState<number[]>([])
     const [managedDeptsNames, setManagedDeptsNames] = useState<string>("")
+    const [departments, setDepartments] = useState<Department[]>([])
 
-    // ==================== التبويبات الرئيسية ====================
+    // ==================== Tabs ====================
     const [activeTab, setActiveTab] = useState<"requests" | "attendance" | "leave" | "overtime" | "permission" | "correction" | "settings">("requests")
 
-    // ==================== جميع الطلبات (للموافقة) ====================
+    // ==================== All Requests ====================
     const [allRequests, setAllRequests] = useState<any[]>([])
     const [selectedDepartment, setSelectedDepartment] = useState<string>("all")
-    const [departments, setDepartments] = useState<Department[]>([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending")
     const [requestsType, setRequestsType] = useState<"all" | "leave" | "overtime" | "permission" | "correction">("all")
 
-    // ==================== طلبات الإجازات ====================
+    // ==================== Manager's Personal Requests ====================
     const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
     const [showLeaveForm, setShowLeaveForm] = useState(false)
     const [leaveType, setLeaveType] = useState("سنوية")
@@ -70,15 +139,13 @@ export default function ManagerPage() {
         message: ""
     })
 
-    // ==================== طلبات الأوفر تايم ====================
-    const [overtimeRequests, setOvertimeRequests] = useState<any[]>([])
+    const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([])
     const [showOvertimeForm, setShowOvertimeForm] = useState(false)
     const [overtimeDate, setOvertimeDate] = useState("")
     const [overtimeHours, setOvertimeHours] = useState("")
     const [overtimeReason, setOvertimeReason] = useState("")
 
-    // ==================== طلبات الإذن ====================
-    const [permissionRequests, setPermissionRequests] = useState<any[]>([])
+    const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([])
     const [showPermissionForm, setShowPermissionForm] = useState(false)
     const [permissionType, setPermissionType] = useState("ساعة")
     const [permissionDate, setPermissionDate] = useState("")
@@ -86,23 +153,22 @@ export default function ManagerPage() {
     const [permissionEndTime, setPermissionEndTime] = useState("")
     const [permissionReason, setPermissionReason] = useState("")
 
-    // ==================== طلبات تصحيح البصمة ====================
-    const [correctionRequests, setCorrectionRequests] = useState<any[]>([])
+    const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([])
     const [showCorrectionForm, setShowCorrectionForm] = useState(false)
     const [correctionDate, setCorrectionDate] = useState("")
     const [correctionCheckIn, setCorrectionCheckIn] = useState("")
     const [correctionCheckOut, setCorrectionCheckOut] = useState("")
     const [correctionReason, setCorrectionReason] = useState("")
 
-    // ==================== الحضور (للمدير نفسه) ====================
-    const [todayAttendance, setTodayAttendance] = useState<any>(null)
-    const [attendanceHistory, setAttendanceHistory] = useState<any[]>([])
+    // ==================== Manager's Attendance ====================
+    const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null)
+    const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
     const [currentPos, setCurrentPos] = useState<{ lat: number, lng: number }>({ lat: 0, lng: 0 })
     const [loadingPos, setLoadingPos] = useState(true)
     const [attendanceFrom, setAttendanceFrom] = useState("")
     const [attendanceTo, setAttendanceTo] = useState("")
 
-    // ==================== إعدادات الحساب ====================
+    // ==================== Settings ====================
     const [currentPassword, setCurrentPassword] = useState("")
     const [newPassword, setNewPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
@@ -110,7 +176,7 @@ export default function ManagerPage() {
     const [changingPassword, setChangingPassword] = useState(false)
 
     // =============================================
-    // useEffect لتحميل البيانات
+    // useEffect for loading data
     // =============================================
     useEffect(() => {
         const storedName = localStorage.getItem("name")
@@ -120,7 +186,7 @@ export default function ManagerPage() {
         const storedJobTitle = localStorage.getItem("job_title")
 
         if (!storedName || !storedId || storedRole !== "manager") {
-            alert("غير مصرح بالدخول")
+            alert(t('unauthorized'))
             router.push("/")
             return
         }
@@ -128,9 +194,9 @@ export default function ManagerPage() {
         setManagerName(storedName)
         setManagerUsername(storedUsername || "")
         setManagerId(storedId)
-        setJobTitle(storedJobTitle || "مدير")
+        setJobTitle(storedJobTitle || t('manager'))
 
-        // تحميل البيانات
+        // Load data
         fetchManagedDepartments(storedId)
         fetchLeaveRequests(storedId)
         fetchLeaveBalance(storedId)
@@ -139,7 +205,7 @@ export default function ManagerPage() {
         fetchCorrectionRequests(storedId)
         fetchTodayAttendance(storedUsername || "")
 
-        // الحصول على الموقع الجغرافي
+        // Get geolocation
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 pos => {
@@ -147,74 +213,18 @@ export default function ManagerPage() {
                     setLoadingPos(false)
                 },
                 () => {
-                    alert("لم نتمكن من الحصول على موقعك، تأكد من تفعيل GPS");
+                    alert(t('location_error'))
                     setLoadingPos(false)
                 }
             )
         } else {
-            alert("المتصفح لا يدعم GPS")
+            alert(t('gps_not_supported'))
             setLoadingPos(false)
         }
     }, [])
 
     // =============================================
-    // دوال تغيير كلمة المرور
-    // =============================================
-    const handleChangePassword = async () => {
-        setPasswordMessage(null)
-
-        if (!currentPassword || !newPassword || !confirmPassword) {
-            setPasswordMessage({ type: 'error', text: 'جميع الحقول مطلوبة' })
-            return
-        }
-
-        if (newPassword !== confirmPassword) {
-            setPasswordMessage({ type: 'error', text: 'كلمة المرور الجديدة غير متطابقة' })
-            return
-        }
-
-        if (newPassword.length < 3) {
-            setPasswordMessage({ type: 'error', text: 'كلمة المرور يجب أن تكون 3 أحرف على الأقل' })
-            return
-        }
-
-        setChangingPassword(true)
-
-        try {
-            const res = await fetch("/api/change-password", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    employee_id: managerId,
-                    current_password: currentPassword,
-                    new_password: newPassword,
-                    confirm_password: confirmPassword
-                })
-            })
-
-            const data = await res.json()
-
-            if (res.ok) {
-                setPasswordMessage({ type: 'success', text: data.message })
-                setCurrentPassword("")
-                setNewPassword("")
-                setConfirmPassword("")
-
-                if (localStorage.getItem("remembered_username")) {
-                    localStorage.setItem("remembered_password", newPassword)
-                }
-            } else {
-                setPasswordMessage({ type: 'error', text: data.error })
-            }
-        } catch (err) {
-            setPasswordMessage({ type: 'error', text: 'حدث خطأ في الاتصال' })
-        } finally {
-            setChangingPassword(false)
-        }
-    }
-
-    // =============================================
-    // دوال جلب البيانات
+    // Fetch Functions
     // =============================================
     const fetchManagedDepartments = async (managerId: string) => {
         try {
@@ -225,7 +235,7 @@ export default function ManagerPage() {
                 setManagedDepts(deptIds)
 
                 if (deptIds.length === 0) {
-                    setManagedDeptsNames("لا تدير أي أقسام")
+                    setManagedDeptsNames(t('no_departments_managed'))
                     setLoading(false)
                     return
                 }
@@ -239,7 +249,7 @@ export default function ManagerPage() {
                     const deptNames = myDepts.map((d: any) => d.name).join("، ")
                     setManagedDeptsNames(deptNames)
 
-                    // جلب جميع الطلبات
+                    // Fetch all requests
                     await fetchAllRequests(deptIds, "pending")
                 }
             }
@@ -251,28 +261,28 @@ export default function ManagerPage() {
 
     const fetchAllRequests = async (deptIds: number[], statusFilter: string = "pending") => {
         try {
-            // جلب طلبات الإجازات
+            // Fetch leave requests
             const leavesRes = await fetch(`/api/leave-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const leaves = leavesRes.ok ? await leavesRes.json() : []
 
-            // جلب طلبات الأوفر تايم
+            // Fetch overtime requests
             const overtimeRes = await fetch(`/api/overtime-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const overtime = overtimeRes.ok ? await overtimeRes.json() : []
 
-            // جلب طلبات الإذن
+            // Fetch permission requests
             const permissionRes = await fetch(`/api/permission-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const permission = permissionRes.ok ? await permissionRes.json() : []
 
-            // جلب طلبات تصحيح البصمة
+            // Fetch correction requests
             const correctionRes = await fetch(`/api/attendance-correction?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const correction = correctionRes.ok ? await correctionRes.json() : []
 
-            // دمج كل الطلبات
+            // Combine all requests
             const combined = [
-                ...leaves.map((r: any) => ({ ...r, requestType: "leave", requestTypeText: "إجازة" })),
-                ...overtime.map((r: any) => ({ ...r, requestType: "overtime", requestTypeText: "أوفر تايم" })),
-                ...permission.map((r: any) => ({ ...r, requestType: "permission", requestTypeText: "إذن" })),
-                ...correction.map((r: any) => ({ ...r, requestType: "correction", requestTypeText: "تصحيح بصمة" }))
+                ...leaves.map((r: any) => ({ ...r, requestType: "leave", requestTypeText: t('leave') })),
+                ...overtime.map((r: any) => ({ ...r, requestType: "overtime", requestTypeText: t('overtime') })),
+                ...permission.map((r: any) => ({ ...r, requestType: "permission", requestTypeText: t('permission') })),
+                ...correction.map((r: any) => ({ ...r, requestType: "correction", requestTypeText: t('correction') }))
             ]
 
             combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -293,7 +303,7 @@ export default function ManagerPage() {
         }
     }
 
-    // دوال جلب طلبات المدير الشخصية
+    // Fetch manager's personal requests
     const fetchLeaveRequests = async (empId: string) => {
         try {
             const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
@@ -367,7 +377,10 @@ export default function ManagerPage() {
     }
 
     const fetchAttendanceHistory = async () => {
-        if (!attendanceFrom || !attendanceTo) return alert("حدد من وإلى")
+        if (!attendanceFrom || !attendanceTo) {
+            alert(t('select_dates'))
+            return
+        }
         try {
             const res = await fetch(`/api/attendance?username=${managerUsername}&from=${attendanceFrom}&to=${attendanceTo}`)
             if (res.ok) setAttendanceHistory(await res.json())
@@ -375,7 +388,7 @@ export default function ManagerPage() {
     }
 
     // =============================================
-    // دوال الموافقة على جميع أنواع الطلبات
+    // Approve/Reject Functions
     // =============================================
     const approveAnyRequest = async (req: any) => {
         try {
@@ -432,20 +445,23 @@ export default function ManagerPage() {
     }
 
     // =============================================
-    // دوال طلبات الإجازات
+    // Manager's Personal Request Functions
     // =============================================
     const submitLeaveRequest = async () => {
-        if (!leaveStart || !leaveEnd) return alert("حدد تاريخ البداية والنهاية")
+        if (!leaveStart || !leaveEnd) {
+            alert(t('select_dates'))
+            return
+        }
 
         const start = new Date(leaveStart)
         const end = new Date(leaveEnd)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
         if (leaveType === "سنوية" && days > leaveBalance.remaining) {
-            return alert(`❌ لا يوجد رصيد كافٍ. المتبقي: ${leaveBalance.remaining} يوم`)
+            return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining} ${t('days')}`)
         }
         if (leaveType === "عارضة" && days > leaveBalance.emergency_remaining) {
-            return alert(`❌ لا يوجد رصيد كافٍ للعارضة. المتبقي: ${leaveBalance.emergency_remaining} يوم`)
+            return alert(`${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.emergency_remaining} ${t('days')}`)
         }
 
         const res = await fetch("/api/leave-requests", {
@@ -473,7 +489,7 @@ export default function ManagerPage() {
     }
 
     const deleteLeaveRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/leave-requests?id=${id}&employee_id=${managerId}`, {
@@ -488,11 +504,11 @@ export default function ManagerPage() {
         } catch (err) { console.error(err) }
     }
 
-    // =============================================
-    // دوال طلبات الأوفر تايم
-    // =============================================
     const submitOvertimeRequest = async () => {
-        if (!overtimeDate || !overtimeHours) return alert("حدد التاريخ وعدد الساعات")
+        if (!overtimeDate || !overtimeHours) {
+            alert(t('select_date_and_hours'))
+            return
+        }
 
         const res = await fetch("/api/overtime-requests", {
             method: "POST",
@@ -517,7 +533,7 @@ export default function ManagerPage() {
     }
 
     const deleteOvertimeRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/overtime-requests?id=${id}&employee_id=${managerId}`, {
@@ -529,14 +545,15 @@ export default function ManagerPage() {
         } catch (err) { console.error(err) }
     }
 
-    // =============================================
-    // دوال طلبات الإذن
-    // =============================================
     const submitPermissionRequest = async () => {
-        if (!permissionDate || !permissionReason) return alert("حدد التاريخ والسبب")
+        if (!permissionDate || !permissionReason) {
+            alert(t('select_date_and_reason'))
+            return
+        }
 
         if ((permissionType === "ساعة" || permissionType === "ساعتين") && !permissionStartTime) {
-            return alert("حدد وقت بداية الإذن")
+            alert(t('select_start_time'))
+            return
         }
 
         const res = await fetch("/api/permission-requests", {
@@ -566,7 +583,7 @@ export default function ManagerPage() {
     }
 
     const deletePermissionRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/permission-requests?id=${id}&employee_id=${managerId}`, {
@@ -578,11 +595,11 @@ export default function ManagerPage() {
         } catch (err) { console.error(err) }
     }
 
-    // =============================================
-    // دوال طلبات تصحيح البصمة
-    // =============================================
     const submitCorrectionRequest = async () => {
-        if (!correctionDate || !correctionReason) return alert("حدد التاريخ والسبب")
+        if (!correctionDate || !correctionReason) {
+            alert(t('select_date_and_reason'))
+            return
+        }
 
         const res = await fetch("/api/attendance-correction", {
             method: "POST",
@@ -609,7 +626,7 @@ export default function ManagerPage() {
     }
 
     const deleteCorrectionRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/attendance-correction?id=${id}&employee_id=${managerId}`, {
@@ -622,26 +639,40 @@ export default function ManagerPage() {
     }
 
     // =============================================
-    // دوال تسجيل حضور المدير
+    // Manager's Attendance Functions
     // =============================================
     const handleCheck = async (type: "check_in" | "check_out") => {
-        if (loadingPos) { alert("جاري الحصول على الموقع، انتظر لحظة..."); return }
-        if (!currentPos.lat || !currentPos.lng) { alert("الموقع غير متوفر"); return }
+        if (loadingPos) {
+            alert(t('getting_location'))
+            return
+        }
+        if (!currentPos.lat || !currentPos.lng) {
+            alert(t('location_not_available'))
+            return
+        }
 
         try {
             const res = await fetch("/api/attendance", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: managerUsername, type, lat: currentPos.lat, lng: currentPos.lng })
+                body: JSON.stringify({
+                    username: managerUsername,
+                    type,
+                    lat: currentPos.lat,
+                    lng: currentPos.lng
+                })
             })
             const data = await res.json()
             alert(data.message || data.error)
             fetchTodayAttendance(managerUsername)
-        } catch (err) { console.error(err); alert("حدث خطأ أثناء الإرسال") }
+        } catch (err) {
+            console.error(err)
+            alert(t('error_occurred'))
+        }
     }
 
     // =============================================
-    // دوال تغيير الفلتر
+    // Filter Functions
     // =============================================
     const handleFilterChange = (newFilter: "all" | "pending" | "approved" | "rejected") => {
         setFilter(newFilter)
@@ -659,7 +690,63 @@ export default function ManagerPage() {
     }
 
     // =============================================
-    // دالة تسجيل الخروج
+    // Change Password
+    // =============================================
+    const handleChangePassword = async () => {
+        setPasswordMessage(null)
+
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            setPasswordMessage({ type: 'error', text: t('all_fields_required') })
+            return
+        }
+
+        if (newPassword !== confirmPassword) {
+            setPasswordMessage({ type: 'error', text: t('passwords_not_match') })
+            return
+        }
+
+        if (newPassword.length < 3) {
+            setPasswordMessage({ type: 'error', text: t('password_min_length') })
+            return
+        }
+
+        setChangingPassword(true)
+
+        try {
+            const res = await fetch("/api/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employee_id: managerId,
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                    confirm_password: confirmPassword
+                })
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                setPasswordMessage({ type: 'success', text: data.message })
+                setCurrentPassword("")
+                setNewPassword("")
+                setConfirmPassword("")
+
+                if (localStorage.getItem("remembered_username")) {
+                    localStorage.setItem("remembered_password", newPassword)
+                }
+            } else {
+                setPasswordMessage({ type: 'error', text: data.error })
+            }
+        } catch (err) {
+            setPasswordMessage({ type: 'error', text: t('connection_error') })
+        } finally {
+            setChangingPassword(false)
+        }
+    }
+
+    // =============================================
+    // Logout Function
     // =============================================
     const handleLogout = () => {
         localStorage.clear()
@@ -669,22 +756,24 @@ export default function ManagerPage() {
         router.push("/")
     }
 
-    // دوال مساعدة
+    // =============================================
+    // Helper Functions
+    // =============================================
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString("ar-EG")
+        return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')
     }
 
     const formatTime = (dateString: string | null) => {
         if (!dateString) return "-"
-        return new Date(dateString).toLocaleTimeString()
+        return new Date(dateString).toLocaleTimeString(language === 'ar' ? 'ar-EG' : 'en-US')
     }
 
     const getApprovalStatus = (req: any) => {
-        if (req.status === "مرفوضة") return { text: "❌ مرفوضة", color: "#f44336" }
-        if (req.status === "تمت الموافقة") return { text: "✅ معتمدة", color: "#4caf50" }
-        if (req.hr_approved && req.manager_approved) return { text: "✅ معتمدة", color: "#4caf50" }
-        if (req.hr_approved || req.manager_approved) return { text: "⏳ موافقة واحدة", color: "#ff9800" }
-        return { text: "🕒 في انتظار الموافقات", color: "#9e9e9e" }
+        if (req.status === "مرفوضة") return { text: t('rejected'), color: "#f44336" }
+        if (req.status === "تمت الموافقة") return { text: t('approved'), color: "#4caf50" }
+        if (req.hr_approved && req.manager_approved) return { text: t('approved'), color: "#4caf50" }
+        if (req.hr_approved || req.manager_approved) return { text: t('one_approval'), color: "#ff9800" }
+        return { text: t('pending_approvals'), color: "#9e9e9e" }
     }
 
     const getRequestTypeColor = (type: string) => {
@@ -698,15 +787,20 @@ export default function ManagerPage() {
     }
 
     return (
-        <div style={styles.page}>
+        <div style={styles.page} dir={dir}>
             <div style={styles.container}>
-                {/* رأس الصفحة */}
+                {/* Header */}
                 <div style={styles.header}>
-                    <h2 style={styles.title}>لوحة تحكم المدير</h2>
-                    <button onClick={handleLogout} style={styles.logoutButton}>تسجيل خروج</button>
+                    <h2 style={styles.title}>{t('manager_page')}</h2>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        <LanguageSwitcher />
+                        <button onClick={handleLogout} style={styles.logoutButton}>
+                            {t('logout')}
+                        </button>
+                    </div>
                 </div>
 
-                {/* بطاقة معلومات المدير */}
+                {/* Manager Profile Card */}
                 <div style={styles.profileCard}>
                     <div style={styles.profileHeader}>
                         <div style={styles.profileAvatar}>
@@ -718,22 +812,22 @@ export default function ManagerPage() {
                             <div style={styles.profileDetails}>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>📅</span>
-                                    تعيين: {hireDate ? formatDate(hireDate) : "غير محدد"}
+                                    {t('hire_date')}: {hireDate ? formatDate(hireDate) : t('na')}
                                 </span>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>⏳</span>
-                                    مدة الخدمة: {leaveBalance.yearsOfService} سنة
+                                    {t('years_of_service')}: {leaveBalance.yearsOfService} {t('years')}
                                 </span>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>👥</span>
-                                    الأقسام: {managedDeptsNames || "لا يوجد"}
+                                    {t('managed_departments')}: {managedDeptsNames || t('none')}
                                 </span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* شريط التبويبات الرئيسية */}
+                {/* Tab Bar */}
                 <div style={styles.tabBar}>
                     <button
                         onClick={() => setActiveTab("requests")}
@@ -743,7 +837,7 @@ export default function ManagerPage() {
                             color: activeTab === "requests" ? 'white' : '#333',
                         }}
                     >
-                        📋 طلبات الموظفين
+                        📋 {t('employee_requests')}
                     </button>
                     <button
                         onClick={() => setActiveTab("attendance")}
@@ -753,7 +847,7 @@ export default function ManagerPage() {
                             color: activeTab === "attendance" ? 'white' : '#333',
                         }}
                     >
-                        🕒 تسجيل حضوري
+                        🕒 {t('my_attendance')}
                     </button>
                     <button
                         onClick={() => setActiveTab("leave")}
@@ -763,7 +857,7 @@ export default function ManagerPage() {
                             color: activeTab === "leave" ? 'white' : '#333',
                         }}
                     >
-                        🏖️ إجازات
+                        🏖️ {t('my_leaves')}
                     </button>
                     <button
                         onClick={() => setActiveTab("overtime")}
@@ -773,7 +867,7 @@ export default function ManagerPage() {
                             color: activeTab === "overtime" ? 'white' : '#333',
                         }}
                     >
-                        ⏰ أوفر تايم
+                        ⏰ {t('my_overtime')}
                     </button>
                     <button
                         onClick={() => setActiveTab("permission")}
@@ -783,7 +877,7 @@ export default function ManagerPage() {
                             color: activeTab === "permission" ? 'white' : '#333',
                         }}
                     >
-                        ⏳ إذن
+                        ⏳ {t('my_permissions')}
                     </button>
                     <button
                         onClick={() => setActiveTab("correction")}
@@ -793,7 +887,7 @@ export default function ManagerPage() {
                             color: activeTab === "correction" ? 'white' : '#333',
                         }}
                     >
-                        🔧 تصحيح بصمة
+                        🔧 {t('my_corrections')}
                     </button>
                     <button
                         onClick={() => setActiveTab("settings")}
@@ -803,18 +897,18 @@ export default function ManagerPage() {
                             color: activeTab === "settings" ? 'white' : '#333',
                         }}
                     >
-                        ⚙️ إعدادات
+                        ⚙️ {t('settings')}
                     </button>
                 </div>
 
                 {/* ========================================= */}
-                {/* تبويب طلبات الموظفين */}
+                {/* Employee Requests Tab */}
                 {/* ========================================= */}
                 {activeTab === "requests" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>طلبات الموظفين</h3>
+                        <h3 style={styles.sectionTitle}>{t('employee_requests')}</h3>
 
-                        {/* شريط الفلاتر */}
+                        {/* Filter Tabs */}
                         <div style={styles.filterTabs}>
                             <button
                                 onClick={() => handleFilterChange("pending")}
@@ -824,7 +918,7 @@ export default function ManagerPage() {
                                     color: filter === "pending" ? 'white' : '#333'
                                 }}
                             >
-                                ⏳ في انتظار الرد
+                                ⏳ {t('pending')}
                             </button>
                             <button
                                 onClick={() => handleFilterChange("approved")}
@@ -834,7 +928,7 @@ export default function ManagerPage() {
                                     color: filter === "approved" ? 'white' : '#333'
                                 }}
                             >
-                                ✅ معتمدة
+                                ✅ {t('approved')}
                             </button>
                             <button
                                 onClick={() => handleFilterChange("rejected")}
@@ -844,7 +938,7 @@ export default function ManagerPage() {
                                     color: filter === "rejected" ? 'white' : '#333'
                                 }}
                             >
-                                ❌ مرفوضة
+                                ❌ {t('rejected')}
                             </button>
                             <button
                                 onClick={() => handleFilterChange("all")}
@@ -854,11 +948,11 @@ export default function ManagerPage() {
                                     color: filter === "all" ? 'white' : '#333'
                                 }}
                             >
-                                📋 الكل
+                                📋 {t('all')}
                             </button>
                         </div>
 
-                        {/* فلاتر إضافية */}
+                        {/* Additional Filters */}
                         <div style={styles.filterSection}>
                             {departments.length > 1 && (
                                 <select
@@ -866,7 +960,7 @@ export default function ManagerPage() {
                                     onChange={e => handleDepartmentChange(e.target.value)}
                                     style={styles.select}
                                 >
-                                    <option value="all">كل الأقسام</option>
+                                    <option value="all">{t('all_departments')}</option>
                                     {departments.map(dept => (
                                         <option key={dept.id} value={dept.id}>{dept.name}</option>
                                     ))}
@@ -878,32 +972,32 @@ export default function ManagerPage() {
                                 onChange={e => handleTypeChange(e.target.value as any)}
                                 style={styles.select}
                             >
-                                <option value="all">كل الأنواع</option>
-                                <option value="leave">🏖️ إجازات</option>
-                                <option value="overtime">⏰ أوفر تايم</option>
-                                <option value="permission">⏳ إذون</option>
-                                <option value="correction">🔧 تصحيح بصمة</option>
+                                <option value="all">{t('all_types')}</option>
+                                <option value="leave">{t('leave')}</option>
+                                <option value="overtime">{t('overtime')}</option>
+                                <option value="permission">{t('permission')}</option>
+                                <option value="correction">{t('correction')}</option>
                             </select>
                         </div>
 
-                        {/* جدول الطلبات */}
+                        {/* Requests Table */}
                         <div style={styles.tableContainer}>
                             <table style={styles.table}>
                                 <thead>
                                     <tr>
-                                        <th style={styles.tableHeader}>الموظف</th>
-                                        <th style={styles.tableHeader}>القسم</th>
-                                        <th style={styles.tableHeader}>نوع الطلب</th>
-                                        <th style={styles.tableHeader}>التفاصيل</th>
-                                        <th style={styles.tableHeader}>حالة الموافقات</th>
-                                        <th style={styles.tableHeader}>الإجراءات</th>
+                                        <th style={styles.tableHeader}>{t('employee')}</th>
+                                        <th style={styles.tableHeader}>{t('department')}</th>
+                                        <th style={styles.tableHeader}>{t('request_type')}</th>
+                                        <th style={styles.tableHeader}>{t('details')}</th>
+                                        <th style={styles.tableHeader}>{t('status')}</th>
+                                        <th style={styles.tableHeader}>{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan={6} style={styles.emptyCell}>جاري التحميل...</td></tr>
+                                        <tr><td colSpan={6} style={styles.emptyCell}>{t('loading')}</td></tr>
                                     ) : allRequests.length === 0 ? (
-                                        <tr><td colSpan={6} style={styles.emptyCell}>لا توجد طلبات</td></tr>
+                                        <tr><td colSpan={6} style={styles.emptyCell}>{t('no_requests')}</td></tr>
                                     ) : (
                                         allRequests.map(req => {
                                             const deptName = departments.find(d => d.id === req.employees?.department_id)?.name || "-"
@@ -911,17 +1005,17 @@ export default function ManagerPage() {
 
                                             let details = ""
                                             if (req.requestType === "leave") {
-                                                details = `${req.leave_type} - من ${req.start_date} إلى ${req.end_date}`
+                                                details = `${req.leave_type} - ${t('from')} ${req.start_date} ${t('to')} ${req.end_date}`
                                             } else if (req.requestType === "overtime") {
-                                                details = `${req.date} - ${req.hours} ساعة`
+                                                details = `${req.date} - ${req.hours} ${t('hours')}`
                                             } else if (req.requestType === "permission") {
                                                 details = `${req.date} - ${req.permission_type}`
-                                                if (req.start_time) details += ` من ${req.start_time}`
-                                                if (req.end_time) details += ` إلى ${req.end_time}`
+                                                if (req.start_time) details += ` ${t('from')} ${req.start_time}`
+                                                if (req.end_time) details += ` ${t('to')} ${req.end_time}`
                                             } else if (req.requestType === "correction") {
                                                 details = `${req.date}`
-                                                if (req.expected_check_in) details += ` - حضور: ${req.expected_check_in}`
-                                                if (req.expected_check_out) details += ` - انصراف: ${req.expected_check_out}`
+                                                if (req.expected_check_in) details += ` - ${t('check_in')}: ${req.expected_check_in}`
+                                                if (req.expected_check_out) details += ` - ${t('check_out')}: ${req.expected_check_out}`
                                             }
 
                                             return (
@@ -942,7 +1036,7 @@ export default function ManagerPage() {
                                                                 color: '#f44336',
                                                                 border: '1px solid #f44336'
                                                             }}>
-                                                                ❌ مرفوضة
+                                                                ❌ {t('rejected')}
                                                             </span>
                                                         ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
                                                             <span style={{
@@ -951,7 +1045,7 @@ export default function ManagerPage() {
                                                                 color: '#2e7d32',
                                                                 border: '1px solid #4caf50'
                                                             }}>
-                                                                ✅ معتمدة
+                                                                ✅ {t('approved')}
                                                             </span>
                                                         ) : (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -961,7 +1055,7 @@ export default function ManagerPage() {
                                                                     color: req.hr_approved ? '#2e7d32' : '#ed6c02',
                                                                     border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
                                                                 }}>
-                                                                    HR : {req.hr_approved ? '✅ موافق' : '⏳ في انتظار'}
+                                                                    HR: {req.hr_approved ? '✅' : '⏳'}
                                                                 </span>
                                                                 <span style={{
                                                                     ...styles.approvalBadge,
@@ -969,12 +1063,12 @@ export default function ManagerPage() {
                                                                     color: req.manager_approved ? '#2e7d32' : '#ed6c02',
                                                                     border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
                                                                 }}>
-                                                                    Manager: {req.manager_approved ? '✅ موافق' : '⏳ في انتظار'}
+                                                                    {t('manager')}: {req.manager_approved ? '✅' : '⏳'}
                                                                 </span>
                                                             </div>
                                                         )}
                                                         {req.pending_from && (
-                                                            <div style={styles.pendingInfo}>في انتظار: {req.pending_from}</div>
+                                                            <div style={styles.pendingInfo}>{t('pending_from')}: {req.pending_from}</div>
                                                         )}
                                                     </td>
                                                     <td style={styles.tableCell}>
@@ -983,21 +1077,21 @@ export default function ManagerPage() {
                                                                 <button
                                                                     onClick={() => approveAnyRequest(req)}
                                                                     style={styles.approveButton}
-                                                                    title="موافقة"
+                                                                    title={t('approve')}
                                                                 >
                                                                     ✓
                                                                 </button>
                                                                 <button
                                                                     onClick={() => rejectAnyRequest(req)}
                                                                     style={styles.rejectButton}
-                                                                    title="رفض"
+                                                                    title={t('reject')}
                                                                 >
                                                                     ✗
                                                                 </button>
                                                             </>
                                                         )}
                                                         {req.manager_approved && req.status === "قيد الانتظار" && (
-                                                            <span style={styles.approvedBadge}>✅ وافقت</span>
+                                                            <span style={styles.approvedBadge}>✅ {t('approved')}</span>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -1011,49 +1105,45 @@ export default function ManagerPage() {
                 )}
 
                 {/* ========================================= */}
-                {/* تبويب تسجيل حضور المدير */}
+                {/* Manager's Attendance Tab */}
                 {/* ========================================= */}
                 {activeTab === "attendance" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>تسجيل حضور وانصراف</h3>
+                        <h3 style={styles.sectionTitle}>{t('my_attendance')}</h3>
 
                         <div style={styles.attendanceCard}>
-                            {/* حالة الموقع */}
+                            {/* Location Status */}
                             <div style={styles.locationStatus}>
-                                {loadingPos ? (
-                                    "⏳ جاري الحصول على الموقع..."
-                                ) : (
-                                    "📍 تم الحصول على الموقع بنجاح"
-                                )}
+                                {loadingPos ? t('getting_location') : t('location_success')}
                             </div>
 
-                            {/* أزرار تسجيل الحضور والانصراف */}
+                            {/* Check In/Out Buttons */}
                             <div style={styles.buttonGroup}>
                                 <button
                                     onClick={() => handleCheck("check_in")}
                                     style={styles.checkInButton}
                                     disabled={loadingPos}
                                 >
-                                    🟢 تسجيل حضور
+                                    🟢 {t('check_in')}
                                 </button>
                                 <button
                                     onClick={() => handleCheck("check_out")}
                                     style={styles.checkOutButton}
                                     disabled={loadingPos}
                                 >
-                                    🔴 تسجيل انصراف
+                                    🔴 {t('check_out')}
                                 </button>
                             </div>
 
-                            {/* جدول حضور اليوم */}
-                            <h4 style={styles.subTitle}>حضور اليوم</h4>
+                            {/* Today's Attendance */}
+                            <h4 style={styles.subTitle}>{t('today_attendance')}</h4>
                             <div style={styles.tableContainer}>
                                 <table style={styles.table}>
                                     <thead>
                                         <tr>
-                                            <th style={styles.tableHeader}>اليوم</th>
-                                            <th style={styles.tableHeader}>الحضور</th>
-                                            <th style={styles.tableHeader}>الانصراف</th>
+                                            <th style={styles.tableHeader}>{t('date')}</th>
+                                            <th style={styles.tableHeader}>{t('check_in')}</th>
+                                            <th style={styles.tableHeader}>{t('check_out')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1066,7 +1156,7 @@ export default function ManagerPage() {
                                         ) : (
                                             <tr>
                                                 <td colSpan={3} style={styles.emptyCell}>
-                                                    لم يتم تسجيل حضور اليوم بعد
+                                                    {t('no_attendance_today')}
                                                 </td>
                                             </tr>
                                         )}
@@ -1074,8 +1164,8 @@ export default function ManagerPage() {
                                 </table>
                             </div>
 
-                            {/* سجل الحضور السابق */}
-                            <h4 style={{ ...styles.subTitle, marginTop: 20 }}>سجل الحضور السابق</h4>
+                            {/* Attendance History */}
+                            <h4 style={{ ...styles.subTitle, marginTop: 20 }}>{t('attendance_history')}</h4>
                             <div style={styles.filterRow}>
                                 <input
                                     type="date"
@@ -1090,7 +1180,7 @@ export default function ManagerPage() {
                                     style={styles.dateInput}
                                 />
                                 <button onClick={fetchAttendanceHistory} style={styles.viewButton}>
-                                    عرض
+                                    {t('view')}
                                 </button>
                             </div>
 
@@ -1098,16 +1188,16 @@ export default function ManagerPage() {
                                 <table style={styles.table}>
                                     <thead>
                                         <tr>
-                                            <th style={styles.tableHeader}>اليوم</th>
-                                            <th style={styles.tableHeader}>الحضور</th>
-                                            <th style={styles.tableHeader}>الانصراف</th>
+                                            <th style={styles.tableHeader}>{t('date')}</th>
+                                            <th style={styles.tableHeader}>{t('check_in')}</th>
+                                            <th style={styles.tableHeader}>{t('check_out')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {attendanceHistory.length === 0 ? (
                                             <tr>
                                                 <td colSpan={3} style={styles.emptyCell}>
-                                                    اختر الفترة لعرض السجل
+                                                    {t('select_dates_to_view')}
                                                 </td>
                                             </tr>
                                         ) : (
@@ -1127,31 +1217,31 @@ export default function ManagerPage() {
                 )}
 
                 {/* ========================================= */}
-                {/* تبويب طلبات الإجازات */}
+                {/* Manager's Leave Tab */}
                 {/* ========================================= */}
                 {activeTab === "leave" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات الإجازات</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_leaves')}</h3>
                             <button onClick={() => setShowLeaveForm(!showLeaveForm)} style={styles.addButton}>
-                                {showLeaveForm ? '❌ إلغاء' : '➕ طلب إجازة'}
+                                {showLeaveForm ? `❌ ${t('cancel')}` : `➕ ${t('request_leave')}`}
                             </button>
                         </div>
 
-                        {/* كرت رصيد الإجازات */}
+                        {/* Leave Balance Card */}
                         <div style={styles.balanceCard}>
-                            <h4 style={styles.balanceTitle}>رصيد الإجازات</h4>
+                            <h4 style={styles.balanceTitle}>{t('leave_balance')}</h4>
                             {leaveBalance.message && (
                                 <p style={styles.balanceMessage}>{leaveBalance.message}</p>
                             )}
 
                             <div style={styles.balanceRow}>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>السنوية</span>
+                                    <span style={styles.balanceLabel}>{t('annual_total')}</span>
                                     <span style={styles.balanceValue}>{leaveBalance.remaining} / {leaveBalance.total}</span>
                                 </div>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>العارضة</span>
+                                    <span style={styles.balanceLabel}>{t('emergency_leave')}</span>
                                     <span style={styles.balanceValue}>{leaveBalance.emergency_remaining} / {leaveBalance.emergency_total}</span>
                                 </div>
                             </div>
@@ -1160,31 +1250,31 @@ export default function ManagerPage() {
                             </div>
                         </div>
 
-                        {/* نموذج إضافة طلب إجازة */}
+                        {/* New Leave Request Form */}
                         {showLeaveForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب إجازة جديد</h4>
+                                <h4 style={styles.formTitle}>{t('new_leave_request')}</h4>
 
                                 <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={styles.select}>
-                                    <option value="سنوية">إجازة سنوية</option>
-                                    <option value="مرضية">إجازة مرضية</option>
-                                    <option value="عارضة">إجازة عارضة</option>
-                                    <option value="غير مدفوعة">إجازة غير مدفوعة</option>
+                                    <option value="سنوية">{t('annual_leave')}</option>
+                                    <option value="مرضية">{t('sick_leave')}</option>
+                                    <option value="عارضة">{t('emergency_leave')}</option>
+                                    <option value="غير مدفوعة">{t('unpaid_leave')}</option>
                                 </select>
 
                                 <div style={styles.dateRow}>
                                     <div style={styles.dateField}>
-                                        <label style={styles.label}>من:</label>
+                                        <label style={styles.label}>{t('from')}:</label>
                                         <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} style={styles.dateInput} />
                                     </div>
                                     <div style={styles.dateField}>
-                                        <label style={styles.label}>إلى:</label>
+                                        <label style={styles.label}>{t('to')}:</label>
                                         <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} style={styles.dateInput} />
                                     </div>
                                 </div>
 
                                 <textarea
-                                    placeholder="السبب (اختياري)"
+                                    placeholder={t('reason_optional')}
                                     value={leaveReason}
                                     onChange={e => setLeaveReason(e.target.value)}
                                     style={styles.textarea}
@@ -1192,17 +1282,16 @@ export default function ManagerPage() {
                                 />
 
                                 <button onClick={submitLeaveRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        {/* قائمة طلبات الإجازات السابقة */}
-                        {/* قائمة طلبات الإجازات السابقة */}
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        {/* Previous Leave Requests */}
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {leaveRequests.length === 0 && !showLeaveForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {leaveRequests.map(req => {
                                 const status = getApprovalStatus(req)
@@ -1217,7 +1306,7 @@ export default function ManagerPage() {
                                                     color: '#f44336',
                                                     border: '1px solid #f44336'
                                                 }}>
-                                                    ❌ مرفوضة
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{
@@ -1226,7 +1315,7 @@ export default function ManagerPage() {
                                                     color: '#2e7d32',
                                                     border: '1px solid #4caf50'
                                                 }}>
-                                                    ✅ معتمدة
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
@@ -1248,7 +1337,7 @@ export default function ManagerPage() {
                                                         backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
                                                         border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
                                                     }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
                                                         <span style={{
                                                             color: req.manager_approved ? '#2e7d32' : '#ed6c02',
                                                             fontWeight: 'bold'
@@ -1261,21 +1350,21 @@ export default function ManagerPage() {
                                         </div>
 
                                         <p style={styles.requestDates}>
-                                            من {formatDate(req.start_date)} إلى {formatDate(req.end_date)}
+                                            {t('from')} {formatDate(req.start_date)} {t('to')} {formatDate(req.end_date)}
                                         </p>
 
-                                        {req.reason && <p style={styles.requestReason}>السبب: {req.reason}</p>}
+                                        {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && !req.manager_approved && (
                                                 <button
                                                     onClick={() => deleteLeaveRequest(req.id)}
                                                     style={styles.deleteButton}
                                                 >
-                                                    🗑️ حذف
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -1287,28 +1376,28 @@ export default function ManagerPage() {
                 )}
 
                 {/* ========================================= */}
-                {/* تبويب طلبات الأوفر تايم */}
+                {/* Manager's Overtime Tab */}
                 {/* ========================================= */}
                 {activeTab === "overtime" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات الأوفر تايم</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_overtime')}</h3>
                             <button onClick={() => setShowOvertimeForm(!showOvertimeForm)} style={styles.addButton}>
-                                {showOvertimeForm ? '❌ إلغاء' : '➕ طلب أوفر تايم'}
+                                {showOvertimeForm ? `❌ ${t('cancel')}` : `➕ ${t('request_overtime')}`}
                             </button>
                         </div>
 
                         {showOvertimeForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب أوفر تايم جديد</h4>
+                                <h4 style={styles.formTitle}>{t('new_overtime_request')}</h4>
 
                                 <div style={styles.dateField}>
-                                    <label style={styles.label}>التاريخ:</label>
+                                    <label style={styles.label}>{t('date')}:</label>
                                     <input type="date" value={overtimeDate} onChange={e => setOvertimeDate(e.target.value)} style={styles.dateInput} />
                                 </div>
 
                                 <div style={styles.hoursField}>
-                                    <label style={styles.label}>عدد الساعات:</label>
+                                    <label style={styles.label}>{t('hours')}:</label>
                                     <input
                                         type="number"
                                         step="0.5"
@@ -1317,12 +1406,12 @@ export default function ManagerPage() {
                                         value={overtimeHours}
                                         onChange={e => setOvertimeHours(e.target.value)}
                                         style={styles.input}
-                                        placeholder="مثال: 2.5"
+                                        placeholder={t('example_2_5')}
                                     />
                                 </div>
 
                                 <textarea
-                                    placeholder="السبب (اختياري)"
+                                    placeholder={t('reason_optional')}
                                     value={overtimeReason}
                                     onChange={e => setOvertimeReason(e.target.value)}
                                     style={styles.textarea}
@@ -1330,22 +1419,22 @@ export default function ManagerPage() {
                                 />
 
                                 <button onClick={submitOvertimeRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {overtimeRequests.length === 0 && !showOvertimeForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {overtimeRequests.map(req => {
                                 const status = getApprovalStatus(req)
                                 return (
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>أوفر تايم</span>
+                                            <span style={styles.requestType}>{t('overtime')}</span>
                                             {req.status === "مرفوضة" ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
@@ -1353,7 +1442,7 @@ export default function ManagerPage() {
                                                     color: '#f44336',
                                                     border: '1px solid #f44336'
                                                 }}>
-                                                    ❌ مرفوضة
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{
@@ -1362,7 +1451,7 @@ export default function ManagerPage() {
                                                     color: '#2e7d32',
                                                     border: '1px solid #4caf50'
                                                 }}>
-                                                    ✅ معتمدة
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
@@ -1384,7 +1473,7 @@ export default function ManagerPage() {
                                                         backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
                                                         border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
                                                     }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
                                                         <span style={{
                                                             color: req.manager_approved ? '#2e7d32' : '#ed6c02',
                                                             fontWeight: 'bold'
@@ -1396,20 +1485,20 @@ export default function ManagerPage() {
                                             )}
                                         </div>
 
-                                        <p style={styles.requestDates}>التاريخ: {req.date}</p>
-                                        <p style={styles.requestReason}>عدد الساعات: {req.hours} ساعة</p>
-                                        {req.reason && <p style={styles.requestReason}>السبب: {req.reason}</p>}
+                                        <p style={styles.requestDates}>{t('date')}: {req.date}</p>
+                                        <p style={styles.requestReason}>{t('hours')}: {req.hours} {t('hours')}</p>
+                                        {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && (
                                                 <button
                                                     onClick={() => deleteOvertimeRequest(req.id)}
                                                     style={styles.deleteButton}
                                                 >
-                                                    🗑️ حذف
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -1421,54 +1510,78 @@ export default function ManagerPage() {
                 )}
 
                 {/* ========================================= */}
-                {/* تبويب طلبات الإذن */}
+                {/* Manager's Permission Tab */}
                 {/* ========================================= */}
                 {activeTab === "permission" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات الإذن</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_permissions')}</h3>
                             <button onClick={() => setShowPermissionForm(!showPermissionForm)} style={styles.addButton}>
-                                {showPermissionForm ? '❌ إلغاء' : '➕ طلب إذن'}
+                                {showPermissionForm ? `❌ ${t('cancel')}` : `➕ ${t('request_permission')}`}
                             </button>
                         </div>
 
                         {showPermissionForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب إذن</h4>
+                                <h4 style={styles.formTitle}>{t('new_permission_request')}</h4>
 
-                                <select value={permissionType} onChange={e => setPermissionType(e.target.value)} style={styles.select}>
-                                    <option value="ساعة">إذن ساعة</option>
-                                    <option value="ساعتين">إذن ساعتين</option>
-                                    <option value="نص يوم">إذن نص يوم</option>
+                                <select
+                                    value={permissionType}
+                                    onChange={e => setPermissionType(e.target.value)}
+                                    style={styles.select}
+                                >
+                                    <option value="ساعة">{t('one_hour')}</option>
+                                    <option value="ساعتين">{t('two_hours')}</option>
+                                    <option value="نص يوم">{t('half_day')}</option>
                                 </select>
 
                                 <div style={styles.dateField}>
-                                    <label style={styles.label}>التاريخ:</label>
-                                    <input type="date" value={permissionDate} onChange={e => setPermissionDate(e.target.value)} style={styles.dateInput} />
+                                    <label style={styles.label}>{t('date')}:</label>
+                                    <input
+                                        type="date"
+                                        value={permissionDate}
+                                        onChange={e => setPermissionDate(e.target.value)}
+                                        style={styles.dateInput}
+                                    />
                                 </div>
 
                                 {(permissionType === "ساعة" || permissionType === "ساعتين") && (
                                     <div style={styles.timeField}>
-                                        <label style={styles.label}>وقت بداية الإذن:</label>
-                                        <input type="time" value={permissionStartTime} onChange={e => setPermissionStartTime(e.target.value)} style={styles.input} />
+                                        <label style={styles.label}>{t('start_time')}:</label>
+                                        <input
+                                            type="time"
+                                            value={permissionStartTime}
+                                            onChange={e => setPermissionStartTime(e.target.value)}
+                                            style={styles.input}
+                                        />
                                     </div>
                                 )}
 
                                 {permissionType === "نص يوم" && (
                                     <div style={styles.timeRow}>
                                         <div style={styles.timeField}>
-                                            <label style={styles.label}>من:</label>
-                                            <input type="time" value={permissionStartTime} onChange={e => setPermissionStartTime(e.target.value)} style={styles.input} />
+                                            <label style={styles.label}>{t('from')}:</label>
+                                            <input
+                                                type="time"
+                                                value={permissionStartTime}
+                                                onChange={e => setPermissionStartTime(e.target.value)}
+                                                style={styles.input}
+                                            />
                                         </div>
                                         <div style={styles.timeField}>
-                                            <label style={styles.label}>إلى:</label>
-                                            <input type="time" value={permissionEndTime} onChange={e => setPermissionEndTime(e.target.value)} style={styles.input} />
+                                            <label style={styles.label}>{t('to')}:</label>
+                                            <input
+                                                type="time"
+                                                value={permissionEndTime}
+                                                onChange={e => setPermissionEndTime(e.target.value)}
+                                                style={styles.input}
+                                            />
                                         </div>
                                     </div>
                                 )}
 
                                 <textarea
-                                    placeholder="سبب طلب الإذن"
+                                    placeholder={t('reason_required')}
                                     value={permissionReason}
                                     onChange={e => setPermissionReason(e.target.value)}
                                     style={styles.textarea}
@@ -1477,22 +1590,22 @@ export default function ManagerPage() {
                                 />
 
                                 <button onClick={submitPermissionRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {permissionRequests.length === 0 && !showPermissionForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {permissionRequests.map(req => {
                                 const status = getApprovalStatus(req)
                                 return (
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>إذن {req.permission_type}</span>
+                                            <span style={styles.requestType}>{t('permission')} {req.permission_type}</span>
                                             {req.status === "مرفوضة" ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
@@ -1500,7 +1613,7 @@ export default function ManagerPage() {
                                                     color: '#f44336',
                                                     border: '1px solid #f44336'
                                                 }}>
-                                                    ❌ مرفوضة
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{
@@ -1509,7 +1622,7 @@ export default function ManagerPage() {
                                                     color: '#2e7d32',
                                                     border: '1px solid #4caf50'
                                                 }}>
-                                                    ✅ معتمدة
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
@@ -1531,7 +1644,7 @@ export default function ManagerPage() {
                                                         backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
                                                         border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
                                                     }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
                                                         <span style={{
                                                             color: req.manager_approved ? '#2e7d32' : '#ed6c02',
                                                             fontWeight: 'bold'
@@ -1543,26 +1656,28 @@ export default function ManagerPage() {
                                             )}
                                         </div>
 
-                                        <p style={styles.requestDates}>التاريخ: {req.date}</p>
+                                        <p style={styles.requestDates}>{t('date')}: {req.date}</p>
 
                                         {req.start_time && (
                                             <p style={styles.requestReason}>
-                                                {req.permission_type === "نص يوم" ? `من ${req.start_time} إلى ${req.end_time || "?"}` : `بداية من ${req.start_time}`}
+                                                {req.permission_type === "نص يوم"
+                                                    ? `${t('from')} ${req.start_time} ${t('to')} ${req.end_time || "?"}`
+                                                    : `${t('from')} ${req.start_time}`}
                                             </p>
                                         )}
 
-                                        <p style={styles.requestReason}>السبب: {req.reason}</p>
+                                        <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && (
                                                 <button
                                                     onClick={() => deletePermissionRequest(req.id)}
                                                     style={styles.deleteButton}
                                                 >
-                                                    🗑️ حذف
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -1574,23 +1689,23 @@ export default function ManagerPage() {
                 )}
 
                 {/* ========================================= */}
-                {/* تبويب طلبات تصحيح البصمة */}
+                {/* Manager's Correction Tab */}
                 {/* ========================================= */}
                 {activeTab === "correction" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات تصحيح البصمة</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_corrections')}</h3>
                             <button onClick={() => setShowCorrectionForm(!showCorrectionForm)} style={styles.addButton}>
-                                {showCorrectionForm ? '❌ إلغاء' : '➕ طلب تصحيح'}
+                                {showCorrectionForm ? `❌ ${t('cancel')}` : `➕ ${t('request_correction')}`}
                             </button>
                         </div>
 
                         {showCorrectionForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب تصحيح بصمة</h4>
+                                <h4 style={styles.formTitle}>{t('new_correction_request')}</h4>
 
                                 <div style={styles.dateField}>
-                                    <label style={styles.label}>التاريخ المطلوب تصحيحه:</label>
+                                    <label style={styles.label}>{t('date_to_correct')}:</label>
                                     <input
                                         type="date"
                                         value={correctionDate}
@@ -1602,17 +1717,27 @@ export default function ManagerPage() {
 
                                 <div style={styles.timeRow}>
                                     <div style={styles.timeField}>
-                                        <label style={styles.label}>وقت الحضور المفترض (اختياري):</label>
-                                        <input type="time" value={correctionCheckIn} onChange={e => setCorrectionCheckIn(e.target.value)} style={styles.input} />
+                                        <label style={styles.label}>{t('expected_check_in')}:</label>
+                                        <input
+                                            type="time"
+                                            value={correctionCheckIn}
+                                            onChange={e => setCorrectionCheckIn(e.target.value)}
+                                            style={styles.input}
+                                        />
                                     </div>
                                     <div style={styles.timeField}>
-                                        <label style={styles.label}>وقت الانصراف المفترض (اختياري):</label>
-                                        <input type="time" value={correctionCheckOut} onChange={e => setCorrectionCheckOut(e.target.value)} style={styles.input} />
+                                        <label style={styles.label}>{t('expected_check_out')}:</label>
+                                        <input
+                                            type="time"
+                                            value={correctionCheckOut}
+                                            onChange={e => setCorrectionCheckOut(e.target.value)}
+                                            style={styles.input}
+                                        />
                                     </div>
                                 </div>
 
                                 <textarea
-                                    placeholder="سبب طلب التصحيح"
+                                    placeholder={t('reason_required')}
                                     value={correctionReason}
                                     onChange={e => setCorrectionReason(e.target.value)}
                                     style={styles.textarea}
@@ -1621,22 +1746,22 @@ export default function ManagerPage() {
                                 />
 
                                 <button onClick={submitCorrectionRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {correctionRequests.length === 0 && !showCorrectionForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {correctionRequests.map(req => {
                                 const status = getApprovalStatus(req)
                                 return (
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>تصحيح يوم {req.date}</span>
+                                            <span style={styles.requestType}>{t('correction_for')} {req.date}</span>
                                             {req.status === "مرفوضة" ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
@@ -1644,7 +1769,7 @@ export default function ManagerPage() {
                                                     color: '#f44336',
                                                     border: '1px solid #f44336'
                                                 }}>
-                                                    ❌ مرفوضة
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{
@@ -1653,7 +1778,7 @@ export default function ManagerPage() {
                                                     color: '#2e7d32',
                                                     border: '1px solid #4caf50'
                                                 }}>
-                                                    ✅ معتمدة
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
@@ -1675,7 +1800,7 @@ export default function ManagerPage() {
                                                         backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
                                                         border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
                                                     }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
                                                         <span style={{
                                                             color: req.manager_approved ? '#2e7d32' : '#ed6c02',
                                                             fontWeight: 'bold'
@@ -1689,23 +1814,27 @@ export default function ManagerPage() {
 
                                         {(req.expected_check_in || req.expected_check_out) && (
                                             <div style={styles.correctionTimes}>
-                                                {req.expected_check_in && <p>⏰ الحضور المفترض: {req.expected_check_in}</p>}
-                                                {req.expected_check_out && <p>⌛ الانصراف المفترض: {req.expected_check_out}</p>}
+                                                {req.expected_check_in && (
+                                                    <p>⏰ {t('expected_check_in')}: {req.expected_check_in}</p>
+                                                )}
+                                                {req.expected_check_out && (
+                                                    <p>⌛ {t('expected_check_out')}: {req.expected_check_out}</p>
+                                                )}
                                             </div>
                                         )}
 
-                                        <p style={styles.requestReason}>السبب: {req.reason}</p>
+                                        <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && (
                                                 <button
                                                     onClick={() => deleteCorrectionRequest(req.id)}
                                                     style={styles.deleteButton}
                                                 >
-                                                    🗑️ حذف
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -1717,17 +1846,17 @@ export default function ManagerPage() {
                 )}
 
                 {/* ========================================= */}
-                {/* تبويب الإعدادات */}
+                {/* Settings Tab */}
                 {/* ========================================= */}
                 {activeTab === "settings" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>إعدادات الحساب</h3>
+                        <h3 style={styles.sectionTitle}>{t('settings')}</h3>
 
                         <div style={styles.settingsCard}>
-                            <h4 style={styles.settingsTitle}>تغيير كلمة المرور</h4>
+                            <h4 style={styles.settingsTitle}>{t('change_password')}</h4>
 
                             <div style={styles.inputGroup}>
-                                <label style={styles.inputLabel}>كلمة المرور الحالية</label>
+                                <label style={styles.inputLabel}>{t('current_password')}</label>
                                 <input
                                     type="password"
                                     value={currentPassword}
@@ -1738,7 +1867,7 @@ export default function ManagerPage() {
                             </div>
 
                             <div style={styles.inputGroup}>
-                                <label style={styles.inputLabel}>كلمة المرور الجديدة</label>
+                                <label style={styles.inputLabel}>{t('new_password')}</label>
                                 <input
                                     type="password"
                                     value={newPassword}
@@ -1749,7 +1878,7 @@ export default function ManagerPage() {
                             </div>
 
                             <div style={styles.inputGroup}>
-                                <label style={styles.inputLabel}>تأكيد كلمة المرور الجديدة</label>
+                                <label style={styles.inputLabel}>{t('confirm_password')}</label>
                                 <input
                                     type="password"
                                     value={confirmPassword}
@@ -1779,22 +1908,22 @@ export default function ManagerPage() {
                                     cursor: changingPassword ? 'not-allowed' : 'pointer'
                                 }}
                             >
-                                {changingPassword ? 'جاري الحفظ...' : '💾 حفظ كلمة المرور الجديدة'}
+                                {changingPassword ? t('loading') : `💾 ${t('save_new_password')}`}
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* الفوتر */}
+                {/* Footer */}
                 <div style={styles.footer}>
-                    &copy; 2026 Khaled Aboellil. جميع الحقوق محفوظة.
+                    &copy; 2026 Khaled Aboellil. {t('footer')}
                 </div>
             </div>
         </div>
     )
 }
 
-// ==================== الأنماط المحسنة (مع أزرار حذف واضحة) ====================
+// ==================== Styles ====================
 const styles: { [key: string]: React.CSSProperties } = {
     page: {
         fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
@@ -1830,10 +1959,9 @@ const styles: { [key: string]: React.CSSProperties } = {
         border: 'none',
         borderRadius: 8,
         backgroundColor: '#ef4444',
-        color: '#ffffff',
+        color: '#fff',
         fontWeight: '500',
-        cursor: 'pointer',
-        fontSize: 14
+        cursor: 'pointer'
     },
     profileCard: {
         backgroundColor: '#3b82f6',
@@ -2087,13 +2215,6 @@ const styles: { [key: string]: React.CSSProperties } = {
         padding: 30,
         textAlign: 'center',
         color: '#64748b'
-    },
-    statusBadge: {
-        padding: '4px 8px',
-        borderRadius: 4,
-        color: '#ffffff',
-        fontSize: 11,
-        fontWeight: '500'
     },
     typeBadge: {
         padding: '4px 8px',

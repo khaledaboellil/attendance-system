@@ -143,6 +143,34 @@ export async function POST(req: NextRequest) {
     }
 }
 
+/**
+ * الدالة الأساسية: إنشاء كائن Date صحيح من التاريخ والوقت
+ * هذه الدالة تحاكي طريقة عمل new Date() في تسجيل الحضور
+ */
+function createDateTimeFromLocal(date: string, time: string | null): Date | null {
+    if (!time) return null;
+
+    try {
+        // تقسيم التاريخ (YYYY-MM-DD)
+        const [year, month, day] = date.split('-').map(Number);
+
+        // تقسيم الوقت (HH:mm)
+        const [hours, minutes] = time.split(':').map(Number);
+
+        // إنشاء كائن Date باستخدام التوقيت المحلي للمتصفح/السيرفر
+        // هذا بالضبط ما يفعله new Date() عندما نستخدمه في تسجيل الحضور
+        const localDate = new Date(year, month - 1, day, hours, minutes, 0);
+
+        console.log(`🕒 إنشاء تاريخ محلي: ${date} ${time} -> ${localDate.toString()}`);
+        console.log(`🕒 بصيغة ISO: ${localDate.toISOString()}`);
+
+        return localDate;
+    } catch (error) {
+        console.error("خطأ في إنشاء التاريخ:", error);
+        return null;
+    }
+}
+
 // PATCH: الموافقة على طلب تصحيح بصمة (مع تحديث الحضور)
 export async function PATCH(req: NextRequest) {
     try {
@@ -195,7 +223,7 @@ export async function PATCH(req: NextRequest) {
             updateData.manager_approved_by = approved_by
             updateData.status = "تمت الموافقة"
 
-            // تحديث جدول الحضور مباشرة
+            // تحديث جدول الحضور - بنفس طريقة تسجيل الحضور
             console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
             const employeeId = request.employee_id
             const targetDate = request.date
@@ -205,6 +233,7 @@ export async function PATCH(req: NextRequest) {
             console.log("⏰ وقت الحضور المفترض:", request.expected_check_in)
             console.log("⏰ وقت الانصراف المفترض:", request.expected_check_out)
 
+            // البحث عن سجل الحضور الموجود
             const { data: existingAttendance, error: searchError } = await supabase
                 .from("attendance")
                 .select("*")
@@ -219,17 +248,26 @@ export async function PATCH(req: NextRequest) {
                 day: targetDate
             }
 
+            // ✅ استخدام نفس طريقة تسجيل الحضور بالضبط
             if (request.expected_check_in) {
-                const checkInDateTime = `${targetDate}T${request.expected_check_in}`
-                console.log("🕒 وقت الحضور المراد:", checkInDateTime)
-                attendanceData.check_in = checkInDateTime
+                // إنشاء كائن Date بنفس طريقة new Date() في تسجيل الحضور
+                const checkInDate = createDateTimeFromLocal(targetDate, request.expected_check_in);
+                if (checkInDate) {
+                    attendanceData.check_in = checkInDate.toISOString();
+                    console.log("🕒 وقت الحضور بعد التحويل (ISO):", attendanceData.check_in);
+                }
             }
 
             if (request.expected_check_out) {
-                const checkOutDateTime = `${targetDate}T${request.expected_check_out}`
-                console.log("🕒 وقت الانصراف المراد:", checkOutDateTime)
-                attendanceData.check_out = checkOutDateTime
+                // إنشاء كائن Date بنفس طريقة new Date() في تسجيل الحضور
+                const checkOutDate = createDateTimeFromLocal(targetDate, request.expected_check_out);
+                if (checkOutDate) {
+                    attendanceData.check_out = checkOutDate.toISOString();
+                    console.log("🕒 وقت الانصراف بعد التحويل (ISO):", attendanceData.check_out);
+                }
             }
+
+            console.log("📦 بيانات الحضور الكاملة:", attendanceData);
 
             let attendanceResult
 
@@ -279,10 +317,16 @@ export async function PATCH(req: NextRequest) {
                 }
 
                 if (request.expected_check_in) {
-                    attendanceData.check_in = `${targetDate}T${request.expected_check_in}`
+                    const checkInDate = createDateTimeFromLocal(targetDate, request.expected_check_in);
+                    if (checkInDate) {
+                        attendanceData.check_in = checkInDate.toISOString();
+                    }
                 }
                 if (request.expected_check_out) {
-                    attendanceData.check_out = `${targetDate}T${request.expected_check_out}`
+                    const checkOutDate = createDateTimeFromLocal(targetDate, request.expected_check_out);
+                    if (checkOutDate) {
+                        attendanceData.check_out = checkOutDate.toISOString();
+                    }
                 }
 
                 if (existingAttendance) {
@@ -322,10 +366,16 @@ export async function PATCH(req: NextRequest) {
                 }
 
                 if (request.expected_check_in) {
-                    attendanceData.check_in = `${targetDate}T${request.expected_check_in}`
+                    const checkInDate = createDateTimeFromLocal(targetDate, request.expected_check_in);
+                    if (checkInDate) {
+                        attendanceData.check_in = checkInDate.toISOString();
+                    }
                 }
                 if (request.expected_check_out) {
-                    attendanceData.check_out = `${targetDate}T${request.expected_check_out}`
+                    const checkOutDate = createDateTimeFromLocal(targetDate, request.expected_check_out);
+                    if (checkOutDate) {
+                        attendanceData.check_out = checkOutDate.toISOString();
+                    }
                 }
 
                 if (existingAttendance) {

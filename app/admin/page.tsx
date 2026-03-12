@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import * as XLSX from 'xlsx'
+import { useLanguage } from '@/context/LanguageContext'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
 
 type Employee = {
     id: string
@@ -62,32 +64,32 @@ type AttendanceRecord = {
 
 export default function AdminPage() {
     const router = useRouter()
+    const { t, language, dir } = useLanguage()
 
-    // ==================== بيانات المستخدم ====================
+    // ==================== Admin Data ====================
     const [adminName, setAdminName] = useState("")
     const [adminUsername, setAdminUsername] = useState("")
     const [adminId, setAdminId] = useState("")
     const [hireDate, setHireDate] = useState("")
-    const [jobTitle, setJobTitle] = useState("مدير الموارد البشرية")
+    const [jobTitle, setJobTitle] = useState(t('hr_manager'))
     const [yearsOfService, setYearsOfService] = useState(0)
-    // الأقسام التي يديرها الـ Admin (كمدير)
     const [adminManagedDepts, setAdminManagedDepts] = useState<number[]>([])
 
-    // ==================== التبويبات ====================
+    // ==================== Tabs ====================
     const [activeTab, setActiveTab] = useState<"dashboard" | "employees" | "departments" | "allRequests" | "reports" | "attendance" | "bulkUpload" | "settings" | "leave" | "overtime" | "permission" | "correction">("dashboard")
 
-    // ==================== بيانات الموظفين ====================
+    // ==================== Employees Data ====================
     const [employees, setEmployees] = useState<Employee[]>([])
     const [departments, setDepartments] = useState<Department[]>([])
     const [loading, setLoading] = useState(false)
 
-    // ==================== خاصية الترتيب ====================
+    // ==================== Sorting ====================
     const [sortConfig, setSortConfig] = useState<{
         key: keyof Employee | 'department_name'
         direction: 'asc' | 'desc'
     } | null>(null)
 
-    // ==================== إضافة موظف ====================
+    // ==================== Add Employee ====================
     const [showAddForm, setShowAddForm] = useState(false)
     const [name, setName] = useState("")
     const [username, setUsername] = useState("")
@@ -99,7 +101,7 @@ export default function AdminPage() {
     const [departmentId, setDepartmentId] = useState<number | "">("")
     const [hireDateInput, setHireDateInput] = useState("")
 
-    // ==================== رفع Excel ====================
+    // ==================== Excel Upload ====================
     const [excelFile, setExcelFile] = useState<File | null>(null)
     const [excelData, setExcelData] = useState<any[]>([])
     const [uploadLoading, setUploadLoading] = useState(false)
@@ -109,7 +111,7 @@ export default function AdminPage() {
         errors: []
     })
 
-    // ==================== إدارة الأقسام ====================
+    // ==================== Departments Management ====================
     const [showDeptForm, setShowDeptForm] = useState(false)
     const [deptName, setDeptName] = useState("")
     const [editingDept, setEditingDept] = useState<Department | null>(null)
@@ -118,7 +120,7 @@ export default function AdminPage() {
     const [availableManagers, setAvailableManagers] = useState<Employee[]>([])
     const [deptManagers, setDeptManagers] = useState<any[]>([])
 
-    // ==================== جميع الطلبات ====================
+    // ==================== All Requests ====================
     const [allRequests, setAllRequests] = useState<any[]>([])
     const [requestsFilter, setRequestsFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending")
     const [requestsType, setRequestsType] = useState<"all" | "leave" | "overtime" | "permission" | "correction">("all")
@@ -126,7 +128,7 @@ export default function AdminPage() {
     const [requestsDateFromAll, setRequestsDateFromAll] = useState("")
     const [requestsDateToAll, setRequestsDateToAll] = useState("")
 
-    // ==================== التقارير (موحدة) ====================
+    // ==================== Reports ====================
     const [reportType, setReportType] = useState<"leaves" | "absences" | "attendance">("leaves")
     const [reportDepartment, setReportDepartment] = useState<string>("all")
     const [reportFrom, setReportFrom] = useState("")
@@ -134,7 +136,7 @@ export default function AdminPage() {
     const [reportData, setReportData] = useState<any[]>([])
     const [expandedUser, setExpandedUser] = useState<string | null>(null)
 
-    // ==================== الحضور (للأدمن نفسه) ====================
+    // ==================== Admin Attendance ====================
     const [todayAttendance, setTodayAttendance] = useState<any>(null)
     const [attendanceHistory, setAttendanceHistory] = useState<any[]>([])
     const [currentPos, setCurrentPos] = useState<{ lat: number, lng: number }>({ lat: 0, lng: 0 })
@@ -142,14 +144,14 @@ export default function AdminPage() {
     const [attendanceFrom, setAttendanceFrom] = useState("")
     const [attendanceTo, setAttendanceTo] = useState("")
 
-    // ==================== إعدادات الحساب ====================
+    // ==================== Settings ====================
     const [currentPassword, setCurrentPassword] = useState("")
     const [newPassword, setNewPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
     const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
     const [changingPassword, setChangingPassword] = useState(false)
 
-    // ==================== طلبات الإجازات ====================
+    // ==================== Leave Requests ====================
     const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
     const [showLeaveForm, setShowLeaveForm] = useState(false)
     const [leaveType, setLeaveType] = useState("سنوية")
@@ -168,14 +170,14 @@ export default function AdminPage() {
         message: ""
     })
 
-    // ==================== طلبات الأوفر تايم ====================
+    // ==================== Overtime Requests ====================
     const [overtimeRequests, setOvertimeRequests] = useState<any[]>([])
     const [showOvertimeForm, setShowOvertimeForm] = useState(false)
     const [overtimeDate, setOvertimeDate] = useState("")
     const [overtimeHours, setOvertimeHours] = useState("")
     const [overtimeReason, setOvertimeReason] = useState("")
 
-    // ==================== طلبات الإذن ====================
+    // ==================== Permission Requests ====================
     const [permissionRequests, setPermissionRequests] = useState<any[]>([])
     const [showPermissionForm, setShowPermissionForm] = useState(false)
     const [permissionType, setPermissionType] = useState("ساعة")
@@ -184,7 +186,7 @@ export default function AdminPage() {
     const [permissionEndTime, setPermissionEndTime] = useState("")
     const [permissionReason, setPermissionReason] = useState("")
 
-    // ==================== طلبات تصحيح البصمة ====================
+    // ==================== Correction Requests ====================
     const [correctionRequests, setCorrectionRequests] = useState<any[]>([])
     const [showCorrectionForm, setShowCorrectionForm] = useState(false)
     const [correctionDate, setCorrectionDate] = useState("")
@@ -193,7 +195,7 @@ export default function AdminPage() {
     const [correctionReason, setCorrectionReason] = useState("")
 
     // =============================================
-    // دوال الترتيب
+    // Sorting Functions
     // =============================================
     const sortEmployees = (employees: Employee[]) => {
         if (!sortConfig) return employees
@@ -229,13 +231,13 @@ export default function AdminPage() {
 
     const getSortIcon = (key: keyof Employee | 'department_name') => {
         if (!sortConfig || sortConfig.key !== key) {
-            return '↕️'
+            return language === 'ar' ? '↕️' : '↕️'
         }
         return sortConfig.direction === 'asc' ? '↑' : '↓'
     }
 
     // =============================================
-    // useEffect لتحميل البيانات
+    // useEffect for loading data
     // =============================================
     useEffect(() => {
         const storedName = localStorage.getItem("name")
@@ -245,7 +247,7 @@ export default function AdminPage() {
         const storedJobTitle = localStorage.getItem("job_title")
 
         if (!storedName || !storedId || storedRole !== "admin") {
-            alert("غير مصرح بالدخول")
+            alert(t('unauthorized'))
             router.push("/")
             return
         }
@@ -262,14 +264,12 @@ export default function AdminPage() {
         fetchAdminLeaveBalance(storedId)
         fetchAdminManagedDepts(storedId)
 
-        // جلب طلبات الأدمن الشخصية
         fetchLeaveRequests(storedId)
         fetchLeaveBalance(storedId)
         fetchOvertimeRequests(storedId)
         fetchPermissionRequests(storedId)
         fetchCorrectionRequests(storedId)
 
-        // الحصول على الموقع الجغرافي
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 pos => {
@@ -277,18 +277,18 @@ export default function AdminPage() {
                     setLoadingPos(false)
                 },
                 () => {
-                    alert("لم نتمكن من الحصول على موقعك، تأكد من تفعيل GPS");
+                    alert(t('location_error'));
                     setLoadingPos(false)
                 }
             )
         } else {
-            alert("المتصفح لا يدعم GPS")
+            alert(t('gps_not_supported'))
             setLoadingPos(false)
         }
     }, [])
 
     // =============================================
-    // دالة جديدة: جلب الأقسام التي يديرها الـ Admin
+    // Fetch Functions
     // =============================================
     const fetchAdminManagedDepts = async (managerId: string) => {
         try {
@@ -297,14 +297,10 @@ export default function AdminPage() {
                 const data = await res.json()
                 const deptIds = data.map((item: any) => item.department_id)
                 setAdminManagedDepts(deptIds)
-                console.log("📋 الأقسام التي يديرها الـ Admin:", deptIds)
             }
         } catch (err) { console.error(err) }
     }
 
-    // =============================================
-    // دوال جلب البيانات
-    // =============================================
     const fetchEmployees = async () => {
         try {
             const res = await fetch("/api/employees")
@@ -336,9 +332,6 @@ export default function AdminPage() {
         } catch (err) { console.error(err) }
     }
 
-    // =============================================
-    // دوال جلب جميع الطلبات
-    // =============================================
     const fetchAllRequests = async () => {
         try {
             setLoading(true)
@@ -356,10 +349,10 @@ export default function AdminPage() {
             const correction = correctionRes.ok ? await correctionRes.json() : []
 
             const combined = [
-                ...leaves.map((r: any) => ({ ...r, requestType: "leave", requestTypeText: "إجازة" })),
-                ...overtime.map((r: any) => ({ ...r, requestType: "overtime", requestTypeText: "أوفر تايم" })),
-                ...permission.map((r: any) => ({ ...r, requestType: "permission", requestTypeText: "إذن" })),
-                ...correction.map((r: any) => ({ ...r, requestType: "correction", requestTypeText: "تصحيح بصمة" }))
+                ...leaves.map((r: any) => ({ ...r, requestType: "leave", requestTypeText: t('leave') })),
+                ...overtime.map((r: any) => ({ ...r, requestType: "overtime", requestTypeText: t('overtime') })),
+                ...permission.map((r: any) => ({ ...r, requestType: "permission", requestTypeText: t('permission') })),
+                ...correction.map((r: any) => ({ ...r, requestType: "correction", requestTypeText: t('correction') }))
             ]
 
             combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -404,19 +397,16 @@ export default function AdminPage() {
     }
 
     const fetchAttendanceHistory = async () => {
-        if (!attendanceFrom || !attendanceTo) return alert("حدد من وإلى")
+        if (!attendanceFrom || !attendanceTo) return alert(t('select_dates'))
         try {
             const res = await fetch(`/api/attendance?username=${adminUsername}&from=${attendanceFrom}&to=${attendanceTo}`)
             if (res.ok) setAttendanceHistory(await res.json())
         } catch (err) { console.error(err) }
     }
 
-    // =============================================
-    // دوال جلب التقارير الموحدة
-    // =============================================
     const fetchReport = async () => {
         if (!reportFrom || !reportTo) {
-            alert("حدد تاريخ البداية والنهاية")
+            alert(t('select_dates'))
             return
         }
 
@@ -466,9 +456,6 @@ export default function AdminPage() {
         } catch (err) { console.error(err) }
     }
 
-    // =============================================
-    // دوال طلبات الأدمن الشخصية
-    // =============================================
     const fetchLeaveRequests = async (empId: string) => {
         try {
             const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
@@ -530,20 +517,20 @@ export default function AdminPage() {
     }
 
     // =============================================
-    // دوال تقديم طلبات الأدمن
+    // Submit Functions
     // =============================================
     const submitLeaveRequest = async () => {
-        if (!leaveStart || !leaveEnd) return alert("حدد تاريخ البداية والنهاية")
+        if (!leaveStart || !leaveEnd) return alert(t('select_dates'))
 
         const start = new Date(leaveStart)
         const end = new Date(leaveEnd)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
         if (leaveType === "سنوية" && days > leaveBalance.remaining) {
-            return alert(`❌ لا يوجد رصيد كافٍ. المتبقي: ${leaveBalance.remaining} يوم`)
+            return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining} ${t('days')}`)
         }
         if (leaveType === "عارضة" && days > leaveBalance.emergency_remaining) {
-            return alert(`❌ لا يوجد رصيد كافٍ للعارضة. المتبقي: ${leaveBalance.emergency_remaining} يوم`)
+            return alert(`${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.emergency_remaining} ${t('days')}`)
         }
 
         const res = await fetch("/api/leave-requests", {
@@ -571,7 +558,7 @@ export default function AdminPage() {
     }
 
     const submitOvertimeRequest = async () => {
-        if (!overtimeDate || !overtimeHours) return alert("حدد التاريخ وعدد الساعات")
+        if (!overtimeDate || !overtimeHours) return alert(t('select_date_and_hours'))
 
         const res = await fetch("/api/overtime-requests", {
             method: "POST",
@@ -596,10 +583,10 @@ export default function AdminPage() {
     }
 
     const submitPermissionRequest = async () => {
-        if (!permissionDate || !permissionReason) return alert("حدد التاريخ والسبب")
+        if (!permissionDate || !permissionReason) return alert(t('select_date_and_reason'))
 
         if ((permissionType === "ساعة" || permissionType === "ساعتين") && !permissionStartTime) {
-            return alert("حدد وقت بداية الإذن")
+            return alert(t('select_start_time'))
         }
 
         const res = await fetch("/api/permission-requests", {
@@ -629,7 +616,7 @@ export default function AdminPage() {
     }
 
     const submitCorrectionRequest = async () => {
-        if (!correctionDate || !correctionReason) return alert("حدد التاريخ والسبب")
+        if (!correctionDate || !correctionReason) return alert(t('select_date_and_reason'))
 
         const res = await fetch("/api/attendance-correction", {
             method: "POST",
@@ -656,10 +643,10 @@ export default function AdminPage() {
     }
 
     // =============================================
-    // دوال حذف طلبات الأدمن
+    // Delete Functions
     // =============================================
     const deleteLeaveRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/leave-requests?id=${id}&employee_id=${adminId}`, {
@@ -675,7 +662,7 @@ export default function AdminPage() {
     }
 
     const deleteOvertimeRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/overtime-requests?id=${id}&employee_id=${adminId}`, {
@@ -688,7 +675,7 @@ export default function AdminPage() {
     }
 
     const deletePermissionRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/permission-requests?id=${id}&employee_id=${adminId}`, {
@@ -701,7 +688,7 @@ export default function AdminPage() {
     }
 
     const deleteCorrectionRequest = async (id: string) => {
-        if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return
+        if (!confirm(t('confirm_delete'))) return
 
         try {
             const res = await fetch(`/api/attendance-correction?id=${id}&employee_id=${adminId}`, {
@@ -714,23 +701,23 @@ export default function AdminPage() {
     }
 
     // =============================================
-    // دوال تغيير كلمة المرور
+    // Change Password
     // =============================================
     const handleChangePassword = async () => {
         setPasswordMessage(null)
 
         if (!currentPassword || !newPassword || !confirmPassword) {
-            setPasswordMessage({ type: 'error', text: 'جميع الحقول مطلوبة' })
+            setPasswordMessage({ type: 'error', text: t('all_fields_required') })
             return
         }
 
         if (newPassword !== confirmPassword) {
-            setPasswordMessage({ type: 'error', text: 'كلمة المرور الجديدة غير متطابقة' })
+            setPasswordMessage({ type: 'error', text: t('passwords_not_match') })
             return
         }
 
         if (newPassword.length < 3) {
-            setPasswordMessage({ type: 'error', text: 'كلمة المرور يجب أن تكون 3 أحرف على الأقل' })
+            setPasswordMessage({ type: 'error', text: t('password_min_length') })
             return
         }
 
@@ -763,17 +750,17 @@ export default function AdminPage() {
                 setPasswordMessage({ type: 'error', text: data.error })
             }
         } catch (err) {
-            setPasswordMessage({ type: 'error', text: 'حدث خطأ في الاتصال' })
+            setPasswordMessage({ type: 'error', text: t('connection_error') })
         } finally {
             setChangingPassword(false)
         }
     }
 
     // =============================================
-    // دوال الموظفين (فردي)
+    // Employee Functions
     // =============================================
     const addEmployee = async () => {
-        if (!name || !username || !password || !hireDateInput) return alert("املأ كل البيانات المطلوبة")
+        if (!name || !username || !password || !hireDateInput) return alert(t('fill_required_fields'))
 
         const employeeData: any = {
             name,
@@ -795,7 +782,7 @@ export default function AdminPage() {
 
         const data = await res.json()
         if (res.ok) {
-            alert("تم إضافة الموظف بنجاح")
+            alert(t('employee_added'))
             setName(""); setUsername(""); setPassword(""); setRole("employee")
             setEmail(""); setPhone(""); setJobTitleInput(""); setDepartmentId(""); setHireDateInput("")
             setShowAddForm(false)
@@ -821,13 +808,13 @@ export default function AdminPage() {
         })
         const data = await res.json()
         if (res.ok) {
-            alert("تم تعديل الموظف بنجاح")
+            alert(t('employee_updated'))
             fetchEmployees()
         } else alert(data.error)
     }
 
     const deleteEmployee = async (id: string) => {
-        if (!confirm("⚠️ هل أنت متأكد من حذف الموظف؟\n\nسيتم حذف كل البيانات المرتبطة به")) return
+        if (!confirm(t('confirm_delete_employee'))) return
 
         const res = await fetch("/api/employees", {
             method: "DELETE",
@@ -836,13 +823,13 @@ export default function AdminPage() {
         })
         const data = await res.json()
         if (res.ok) {
-            alert("✅ تم حذف الموظف وكل بياناته بنجاح")
+            alert(t('employee_deleted'))
             fetchEmployees()
         } else alert(data.error)
     }
 
     // =============================================
-    // دوال رفع Excel
+    // Excel Upload Functions
     // =============================================
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -864,7 +851,7 @@ export default function AdminPage() {
 
     const processBulkUpload = async () => {
         if (excelData.length === 0) {
-            alert("لا توجد بيانات للرفع")
+            alert(t('no_data_to_upload'))
             return
         }
 
@@ -876,20 +863,20 @@ export default function AdminPage() {
         for (const row of excelData) {
             try {
                 const employeeData = {
-                    name: row['الاسم'] || row['name'] || '',
-                    username: row['اسم المستخدم'] || row['username'] || '',
-                    password: row['كلمة المرور'] || row['password'] || '123456',
-                    role: row['الدور'] || row['role'] || 'employee',
-                    email: row['البريد'] || row['email'] || '',
-                    phone: row['الهاتف'] || row['phone'] || '',
-                    job_title: row['الوظيفة'] || row['job_title'] || '',
-                    department_id: findDepartmentId(row['القسم'] || row['department']),
-                    hire_date: formatExcelDate(row['تاريخ التعيين'] || row['hire_date'])
+                    name: row[t('name_column')] || row['name'] || '',
+                    username: row[t('username_column')] || row['username'] || '',
+                    password: row[t('password_column')] || row['password'] || '123456',
+                    role: row[t('role_column')] || row['role'] || 'employee',
+                    email: row[t('email_column')] || row['email'] || '',
+                    phone: row[t('phone_column')] || row['phone'] || '',
+                    job_title: row[t('job_title_column')] || row['job_title'] || '',
+                    department_id: findDepartmentId(row[t('department_column')] || row['department']),
+                    hire_date: formatExcelDate(row[t('hire_date_column')] || row['hire_date'])
                 }
 
                 if (!employeeData.name || !employeeData.username) {
                     results.failed++
-                    results.errors.push(`بيانات ناقصة: ${JSON.stringify(row)}`)
+                    results.errors.push(`${t('missing_data')}: ${JSON.stringify(row)}`)
                     continue
                 }
 
@@ -908,7 +895,7 @@ export default function AdminPage() {
                 }
             } catch (error) {
                 results.failed++
-                results.errors.push(`خطأ في معالجة السطر: ${error}`)
+                results.errors.push(`${t('error_processing')}: ${error}`)
             }
         }
 
@@ -937,29 +924,29 @@ export default function AdminPage() {
     const downloadTemplate = () => {
         const template = [
             {
-                'الاسم': "أحمد محمد",
-                'اسم المستخدم': 'ahmed123',
-                'كلمة المرور': '123456',
-                'البريد': 'ahmed@example.com',
-                'الهاتف': '0123456789',
-                'الوظيفة': 'مهندس',
-                'القسم': 'الهندسة',
-                'تاريخ التعيين': '2024-01-01',
-                'الدور': 'employee'
+                [t('name_column')]: "Khaled",
+                [t('username_column')]: '2693939',
+                [t('password_column')]: '123',
+                [t('email_column')]: 'ahmed@example.com',
+                [t('phone_column')]: '0123456789',
+                [t('job_title_column')]: 'Design Engineer',
+                [t('department_column')]: 'Design',
+                [t('hire_date_column')]: '2026-03-11',
+                [t('role_column')]: 'employee'
             }
         ]
 
         const wb = XLSX.utils.book_new()
         const ws = XLSX.utils.json_to_sheet(template)
-        XLSX.utils.book_append_sheet(wb, ws, "الموظفين")
+        XLSX.utils.book_append_sheet(wb, ws, t('employees'))
         XLSX.writeFile(wb, "employees_template.xlsx")
     }
 
     // =============================================
-    // دوال إدارة الأقسام
+    // Department Management Functions
     // =============================================
     const addDepartment = async () => {
-        if (!deptName) return alert("اسم القسم مطلوب")
+        if (!deptName) return alert(t('department_name_required'))
 
         const res = await fetch("/api/departments", {
             method: "POST",
@@ -969,7 +956,7 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            alert("✅ تم إضافة القسم بنجاح")
+            alert(t('department_added'))
             setDeptName("")
             setShowDeptForm(false)
             fetchDepartments()
@@ -979,7 +966,7 @@ export default function AdminPage() {
     }
 
     const updateDepartment = async () => {
-        if (!editingDept || !deptName) return alert("اسم القسم مطلوب")
+        if (!editingDept || !deptName) return alert(t('department_name_required'))
 
         const res = await fetch("/api/departments", {
             method: "PUT",
@@ -989,7 +976,7 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            alert("✅ تم تعديل القسم بنجاح")
+            alert(t('department_updated'))
             setDeptName("")
             setEditingDept(null)
             setShowDeptForm(false)
@@ -1000,7 +987,7 @@ export default function AdminPage() {
     }
 
     const deleteDepartment = async (id: number) => {
-        if (!confirm("⚠️ هل أنت متأكد من حذف هذا القسم؟\n\nلن تتمكن من حذف قسم به موظفين")) return
+        if (!confirm(t('confirm_delete_department'))) return
 
         const res = await fetch(`/api/departments?id=${id}`, {
             method: "DELETE"
@@ -1008,7 +995,7 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            alert("✅ تم حذف القسم بنجاح")
+            alert(t('department_deleted'))
             fetchDepartments()
         } else {
             alert(data.error)
@@ -1048,7 +1035,7 @@ export default function AdminPage() {
 
         const data = await res.json()
         if (res.ok) {
-            alert("✅ تم إضافة المدير للقسم")
+            alert(t('manager_added'))
             fetchDeptManagers(selectedDept.id)
             fetchDepartments()
         } else {
@@ -1057,7 +1044,7 @@ export default function AdminPage() {
     }
 
     const removeManagerFromDept = async (relationId: string) => {
-        if (!confirm("هل أنت متأكد من إزالة هذا المدير من القسم؟")) return
+        if (!confirm(t('confirm_remove_manager'))) return
 
         const res = await fetch(`/api/departments/managers?id=${relationId}`, {
             method: "DELETE"
@@ -1065,7 +1052,7 @@ export default function AdminPage() {
 
         const data = await res.json()
         if (res.ok) {
-            alert("✅ تم إزالة المدير من القسم")
+            alert(t('manager_removed'))
             if (selectedDept) {
                 fetchDeptManagers(selectedDept.id)
                 fetchDepartments()
@@ -1076,7 +1063,7 @@ export default function AdminPage() {
     }
 
     // =============================================
-    // دوال الموافقة على جميع أنواع الطلبات
+    // Approve/Reject Functions
     // =============================================
     const approveAnyRequest = async (req: any) => {
         try {
@@ -1089,12 +1076,6 @@ export default function AdminPage() {
 
             const employeeDeptId = req.employees?.department_id
             const isManagerForThisEmployee = adminManagedDepts.includes(employeeDeptId)
-
-            console.log("🔍 Admin كمدير؟", {
-                employeeDeptId,
-                adminManagedDepts,
-                isManagerForThisEmployee
-            })
 
             const res = await fetch(endpoint, {
                 method: "PATCH",
@@ -1143,11 +1124,11 @@ export default function AdminPage() {
     }
 
     // =============================================
-    // دوال تسجيل حضور الأدمن
+    // Attendance Functions
     // =============================================
     const handleCheck = async (type: "check_in" | "check_out") => {
-        if (loadingPos) { alert("جاري الحصول على الموقع، انتظر لحظة..."); return }
-        if (!currentPos.lat || !currentPos.lng) { alert("الموقع غير متوفر"); return }
+        if (loadingPos) { alert(t('getting_location')); return }
+        if (!currentPos.lat || !currentPos.lng) { alert(t('location_not_available')); return }
 
         try {
             const res = await fetch("/api/attendance", {
@@ -1158,11 +1139,11 @@ export default function AdminPage() {
             const data = await res.json()
             alert(data.message || data.error)
             fetchTodayAttendance(adminUsername)
-        } catch (err) { console.error(err); alert("حدث خطأ أثناء الإرسال") }
+        } catch (err) { console.error(err); alert(t('error_occurred')) }
     }
 
     // =============================================
-    // دالة تسجيل الخروج
+    // Logout Function
     // =============================================
     const handleLogout = () => {
         localStorage.clear()
@@ -1173,15 +1154,15 @@ export default function AdminPage() {
     }
 
     // =============================================
-    // دوال مساعدة
+    // Helper Functions
     // =============================================
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString("ar-EG")
+        return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')
     }
 
     const formatTime = (dateString: string | null) => {
         if (!dateString) return "-"
-        return new Date(dateString).toLocaleTimeString()
+        return new Date(dateString).toLocaleTimeString(language === 'ar' ? 'ar-EG' : 'en-US')
     }
 
     const calculateHours = (checkIn: string | null, checkOut: string | null) => {
@@ -1192,11 +1173,11 @@ export default function AdminPage() {
     }
 
     const getApprovalStatus = (req: any) => {
-        if (req.status === "مرفوضة") return { text: "❌ مرفوضة", color: "#f44336" }
-        if (req.status === "تمت الموافقة") return { text: "✅ معتمدة", color: "#4caf50" }
-        if (req.hr_approved && req.manager_approved) return { text: "✅ معتمدة", color: "#4caf50" }
-        if (req.hr_approved || req.manager_approved) return { text: "⏳ موافقة واحدة", color: "#ff9800" }
-        return { text: "🕒 في انتظار الموافقات", color: "#9e9e9e" }
+        if (req.status === "مرفوضة") return { text: t('rejected'), color: "#f44336" }
+        if (req.status === "تمت الموافقة") return { text: t('approved'), color: "#4caf50" }
+        if (req.hr_approved && req.manager_approved) return { text: t('approved'), color: "#4caf50" }
+        if (req.hr_approved || req.manager_approved) return { text: t('one_approval'), color: "#ff9800" }
+        return { text: t('pending_approvals'), color: "#9e9e9e" }
     }
 
     const getRequestTypeColor = (type: string) => {
@@ -1212,7 +1193,7 @@ export default function AdminPage() {
     const groupedAttendance = reportType === "attendance" && reportData.length > 0
         ? reportData.reduce((acc: any, record) => {
             const employeeId = record.employee_id
-            const empName = record.employees?.name || "موظف"
+            const empName = record.employees?.name || t('employee')
             const deptId = record.employees?.department_id
 
             if (!acc[employeeId]) {
@@ -1245,15 +1226,20 @@ export default function AdminPage() {
     const sortedEmployees = sortEmployees(employees)
 
     return (
-        <div style={styles.page}>
+        <div style={styles.page} dir={dir}>
             <div style={styles.container}>
-                {/* رأس الصفحة */}
+                {/* Header */}
                 <div style={styles.header}>
-                    <h2 style={styles.title}>لوحة تحكم الموارد البشرية</h2>
-                    <button onClick={handleLogout} style={styles.logoutButton}>تسجيل خروج</button>
+                    <h2 style={styles.title}>{t('admin_page')}</h2>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        <LanguageSwitcher />
+                        <button onClick={handleLogout} style={styles.logoutButton}>
+                            {t('logout')}
+                        </button>
+                    </div>
                 </div>
 
-                {/* بطاقة معلومات الأدمن */}
+                {/* Admin Profile Card */}
                 <div style={styles.profileCard}>
                     <div style={styles.profileHeader}>
                         <div style={styles.profileAvatar}>
@@ -1265,11 +1251,11 @@ export default function AdminPage() {
                             <div style={styles.profileDetails}>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>📅</span>
-                                    تعيين: {hireDate ? formatDate(hireDate) : "غير محدد"}
+                                    {t('hire_date')}: {hireDate ? formatDate(hireDate) : t('na')}
                                 </span>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>⏳</span>
-                                    مدة الخدمة: {yearsOfService} سنة
+                                    {t('years_of_service')}: {yearsOfService} {t('years')}
                                 </span>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>👤</span>
@@ -1278,7 +1264,7 @@ export default function AdminPage() {
                                 {adminManagedDepts.length > 0 && (
                                     <span style={{ ...styles.profileDetail, backgroundColor: '#ff9800' }}>
                                         <span style={styles.detailIcon}>👥</span>
-                                        مدير على {adminManagedDepts.length} قسم
+                                        {t('managed_departments')}: {adminManagedDepts.length}
                                     </span>
                                 )}
                             </div>
@@ -1286,143 +1272,140 @@ export default function AdminPage() {
                     </div>
                 </div>
 
-                {/* شريط التبويبات */}
+                {/* Tab Bar */}
                 <div style={styles.tabBar}>
                     <button
                         onClick={() => setActiveTab("dashboard")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "dashboard" ? '#1976d2' : '#e0e0e0', color: activeTab === "dashboard" ? 'white' : '#333' }}
                     >
-                        📊 لوحة المعلومات
+                        📊 {t('dashboard')}
                     </button>
                     <button
                         onClick={() => setActiveTab("employees")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "employees" ? '#1976d2' : '#e0e0e0', color: activeTab === "employees" ? 'white' : '#333' }}
                     >
-                        👥 الموظفين
+                        👥 {t('employees')}
                     </button>
                     <button
                         onClick={() => setActiveTab("bulkUpload")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "bulkUpload" ? '#1976d2' : '#e0e0e0', color: activeTab === "bulkUpload" ? 'white' : '#333' }}
                     >
-                        📤 رفع Excel
+                        📤 {t('bulk_upload')}
                     </button>
                     <button
                         onClick={() => setActiveTab("departments")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "departments" ? '#1976d2' : '#e0e0e0', color: activeTab === "departments" ? 'white' : '#333' }}
                     >
-                        🏢 الأقسام
+                        🏢 {t('departments')}
                     </button>
                     <button
                         onClick={() => setActiveTab("allRequests")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "allRequests" ? '#1976d2' : '#e0e0e0', color: activeTab === "allRequests" ? 'white' : '#333' }}
                     >
-                        📋 طلبات الموظفين
+                        📋 {t('all_requests')}
                     </button>
                     <button
                         onClick={() => setActiveTab("reports")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "reports" ? '#1976d2' : '#e0e0e0', color: activeTab === "reports" ? 'white' : '#333' }}
                     >
-                        📈 التقارير
+                        📈 {t('reports')}
                     </button>
                     <button
                         onClick={() => setActiveTab("attendance")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "attendance" ? '#1976d2' : '#e0e0e0', color: activeTab === "attendance" ? 'white' : '#333' }}
                     >
-                        🕒 تسجيل حضوري
+                        🕒 {t('attendance')}
                     </button>
                     <button
                         onClick={() => setActiveTab("leave")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "leave" ? '#1976d2' : '#e0e0e0', color: activeTab === "leave" ? 'white' : '#333' }}
                     >
-                        🏖️ إجازاتي
+                        🏖️ {t('my_leaves')}
                     </button>
                     <button
                         onClick={() => setActiveTab("overtime")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "overtime" ? '#1976d2' : '#e0e0e0', color: activeTab === "overtime" ? 'white' : '#333' }}
                     >
-                        ⏰ أوفر تايمي
+                        ⏰ {t('my_overtime')}
                     </button>
                     <button
                         onClick={() => setActiveTab("permission")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "permission" ? '#1976d2' : '#e0e0e0', color: activeTab === "permission" ? 'white' : '#333' }}
                     >
-                        ⏳ إذوني
+                        ⏳ {t('my_permissions')}
                     </button>
                     <button
                         onClick={() => setActiveTab("correction")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "correction" ? '#1976d2' : '#e0e0e0', color: activeTab === "correction" ? 'white' : '#333' }}
                     >
-                        🔧 تصحيح بصمتي
+                        🔧 {t('my_corrections')}
                     </button>
                     <button
                         onClick={() => setActiveTab("settings")}
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "settings" ? '#1976d2' : '#e0e0e0', color: activeTab === "settings" ? 'white' : '#333' }}
                     >
-                        ⚙️ إعدادات
+                        ⚙️ {t('settings')}
                     </button>
                 </div>
 
-                {/* ========================================= */}
-                {/* تبويب لوحة المعلومات */}
-                {/* ========================================= */}
+                {/* Dashboard Tab */}
                 {activeTab === "dashboard" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>لوحة المعلومات</h3>
-
+                        <h3 style={styles.sectionTitle}>{t('dashboard')}</h3>
                         <div style={styles.statsGrid}>
                             <div style={styles.statCard}>
                                 <span style={styles.statValue}>{employees.length}</span>
-                                <span style={styles.statLabel}>إجمالي الموظفين</span>
+                                <span style={styles.statLabel}>{t('total_employees')}</span>
                             </div>
                             <div style={styles.statCard}>
                                 <span style={styles.statValue}>{departments.length}</span>
-                                <span style={styles.statLabel}>الأقسام</span>
+                                <span style={styles.statLabel}>{t('total_departments')}</span>
                             </div>
                             <div style={styles.statCard}>
                                 <span style={styles.statValue}>{adminManagedDepts.length}</span>
-                                <span style={styles.statLabel}>أقسام تديرها</span>
+                                <span style={styles.statLabel}>{t('managed_departments')}</span>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب الموظفين (مع خاصية الترتيب) */}
-                {/* ========================================= */}
+                {/* Employees Tab */}
                 {activeTab === "employees" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>إدارة الموظفين</h3>
+                            <h3 style={styles.sectionTitle}>{t('employees')}</h3>
                             <button onClick={() => setShowAddForm(!showAddForm)} style={styles.addButton}>
-                                {showAddForm ? '❌ إلغاء' : '➕ إضافة موظف'}
+                                {showAddForm ? `❌ ${t('cancel')}` : `➕ ${t('add_employee')}`}
                             </button>
                         </div>
 
                         {showAddForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>إضافة موظف جديد</h4>
-                                <input type="text" placeholder="الاسم الكامل *" value={name} onChange={e => setName(e.target.value)} style={styles.input} />
-                                <input type="text" placeholder="اسم المستخدم *" value={username} onChange={e => setUsername(e.target.value)} style={styles.input} />
-                                <input type="password" placeholder="كلمة المرور *" value={password} onChange={e => setPassword(e.target.value)} style={styles.input} />
-                                <input type="email" placeholder="البريد الإلكتروني" value={email} onChange={e => setEmail(e.target.value)} style={styles.input} />
-                                <input type="text" placeholder="رقم الموبايل" value={phone} onChange={e => setPhone(e.target.value)} style={styles.input} />
-                                <input type="text" placeholder="المسمى الوظيفي" value={jobTitleInput} onChange={e => setJobTitleInput(e.target.value)} style={styles.input} />
-                                <input type="date" placeholder="تاريخ التعيين *" value={hireDateInput} onChange={e => setHireDateInput(e.target.value)} style={styles.input} required />
+                                <h4 style={styles.formTitle}>{t('add_new_employee')}</h4>
+                                <input type="text" placeholder={`${t('full_name')} *`} value={name} onChange={e => setName(e.target.value)} style={styles.input} />
+                                <input type="text" placeholder={`${t('username')} *`} value={username} onChange={e => setUsername(e.target.value)} style={styles.input} />
+                                <input type="password" placeholder={`${t('password')} *`} value={password} onChange={e => setPassword(e.target.value)} style={styles.input} />
+                                <input type="email" placeholder={t('email')} value={email} onChange={e => setEmail(e.target.value)} style={styles.input} />
+                                <input type="text" placeholder={t('phone')} value={phone} onChange={e => setPhone(e.target.value)} style={styles.input} />
+                                <input type="text" placeholder={t('job_title')} value={jobTitleInput} onChange={e => setJobTitleInput(e.target.value)} style={styles.input} />
+                                <input type="date" placeholder={`${t('hire_date')} *`} value={hireDateInput} onChange={e => setHireDateInput(e.target.value)} style={styles.input} required />
                                 <select value={departmentId} onChange={e => setDepartmentId(e.target.value ? Number(e.target.value) : "")} style={styles.select}>
-                                    <option value="">اختر القسم</option>
+                                    <option value="">{t('select_department')}</option>
                                     {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
                                 </select>
                                 <select value={role} onChange={e => setRole(e.target.value)} style={styles.select}>
-                                    <option value="employee">موظف</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="manager">مدير</option>
+                                    <option value="employee">{t('employee')}</option>
+                                    <option value="admin">{t('admin')}</option>
+                                    <option value="manager">{t('manager')}</option>
                                 </select>
-                                <button onClick={addEmployee} style={styles.submitButton}>✅ إضافة الموظف</button>
+                                <button onClick={addEmployee} style={styles.submitButton}>
+                                    ✅ {t('add_employee')}
+                                </button>
                             </div>
                         )}
 
                         <div style={styles.sortInfo}>
-                            <span style={styles.sortHint}>👆 اضغط على رأس العمود للترتيب</span>
+                            <span style={styles.sortHint}>{t('click_to_sort')}</span>
                         </div>
 
                         <div style={styles.tableContainer}>
@@ -1430,24 +1413,24 @@ export default function AdminPage() {
                                 <thead>
                                     <tr>
                                         <th style={styles.tableHeader} onClick={() => requestSort('name')}>
-                                            الاسم {getSortIcon('name')}
+                                            {t('name')} {getSortIcon('name')}
                                         </th>
                                         <th style={styles.tableHeader} onClick={() => requestSort('username')}>
-                                            اسم المستخدم {getSortIcon('username')}
+                                            {t('username')} {getSortIcon('username')}
                                         </th>
                                         <th style={styles.tableHeader} onClick={() => requestSort('department_name')}>
-                                            القسم {getSortIcon('department_name')}
+                                            {t('department')} {getSortIcon('department_name')}
                                         </th>
                                         <th style={styles.tableHeader} onClick={() => requestSort('job_title')}>
-                                            الوظيفة {getSortIcon('job_title')}
+                                            {t('job_title')} {getSortIcon('job_title')}
                                         </th>
                                         <th style={styles.tableHeader} onClick={() => requestSort('hire_date')}>
-                                            تاريخ التعيين {getSortIcon('hire_date')}
+                                            {t('hire_date')} {getSortIcon('hire_date')}
                                         </th>
                                         <th style={styles.tableHeader} onClick={() => requestSort('role')}>
-                                            الدور {getSortIcon('role')}
+                                            {t('role')} {getSortIcon('role')}
                                         </th>
-                                        <th style={styles.tableHeader}>الإجراءات</th>
+                                        <th style={styles.tableHeader}>{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1471,7 +1454,7 @@ export default function AdminPage() {
                                                     const newEmployees = employees.map(item => item.id === emp.id ? { ...item, department_id: newDeptId } : item)
                                                     setEmployees(newEmployees)
                                                 }} style={styles.tableSelect}>
-                                                    <option value="">بدون قسم</option>
+                                                    <option value="">{t('no_department')}</option>
                                                     {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
                                                 </select>
                                             </td>
@@ -1492,14 +1475,14 @@ export default function AdminPage() {
                                                     const newEmployees = employees.map(item => item.id === emp.id ? { ...item, role: e.target.value } : item)
                                                     setEmployees(newEmployees)
                                                 }} style={styles.tableSelect}>
-                                                    <option value="employee">موظف</option>
-                                                    <option value="admin">Admin</option>
-                                                    <option value="manager">مدير</option>
+                                                    <option value="employee">{t('employee')}</option>
+                                                    <option value="admin">{t('admin')}</option>
+                                                    <option value="manager">{t('manager')}</option>
                                                 </select>
                                             </td>
                                             <td style={styles.tableCell}>
-                                                <button onClick={() => updateEmployee(emp)} style={styles.editButton}>💾 حفظ</button>
-                                                <button onClick={() => deleteEmployee(emp.id)} style={styles.deleteButton}>🗑️ حذف</button>
+                                                <button onClick={() => updateEmployee(emp)} style={styles.editButton}>💾 {t('save')}</button>
+                                                <button onClick={() => deleteEmployee(emp.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>
                                             </td>
                                         </tr>
                                     ))}
@@ -1509,40 +1492,42 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب رفع Excel */}
-                {/* ========================================= */}
+                {/* Bulk Upload Tab */}
                 {activeTab === "bulkUpload" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>رفع موظفين من Excel</h3>
+                        <h3 style={styles.sectionTitle}>{t('bulk_upload')}</h3>
                         <div style={styles.uploadCard}>
                             <p style={styles.uploadInfo}>
-                                يمكنك رفع ملف Excel يحتوي على بيانات الموظفين دفعة واحدة.
+                                {t('upload_info')}
                                 <br />
-                                الأعمدة المطلوبة: الاسم، اسم المستخدم، كلمة المرور (اختياري)، البريد، الهاتف، الوظيفة، القسم، تاريخ التعيين، الدور
+                                {t('required_columns')}: {t('name')}, {t('username')}, {t('password')}, {t('email')}, {t('phone')}, {t('job_title')}, {t('department')}, {t('hire_date')}, {t('role')}
                             </p>
                             <div style={styles.uploadButtons}>
-                                <button onClick={downloadTemplate} style={styles.templateButton}>📥 تحميل نموذج Excel</button>
+                                <button onClick={downloadTemplate} style={styles.templateButton}>
+                                    📥 {t('download_template')}
+                                </button>
                                 <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} style={styles.fileInput} id="excel-upload" />
-                                <label htmlFor="excel-upload" style={styles.fileLabel}>📂 اختر ملف</label>
+                                <label htmlFor="excel-upload" style={styles.fileLabel}>
+                                    📂 {t('choose_file')}
+                                </label>
                             </div>
                             {excelFile && (
                                 <div style={styles.fileInfo}>
-                                    <p>الملف: {excelFile.name}</p>
-                                    <p>عدد السجلات: {excelData.length}</p>
+                                    <p>{t('file')}: {excelFile.name}</p>
+                                    <p>{t('records')}: {excelData.length}</p>
                                     <button onClick={processBulkUpload} style={styles.uploadButton} disabled={uploadLoading}>
-                                        {uploadLoading ? 'جاري الرفع...' : '🚀 بدء الرفع'}
+                                        {uploadLoading ? t('loading') : `🚀 ${t('start_upload')}`}
                                     </button>
                                 </div>
                             )}
                             {uploadResults.success > 0 && (
                                 <div style={styles.resultsCard}>
-                                    <h4 style={styles.resultsTitle}>نتائج الرفع:</h4>
-                                    <p style={{ color: '#4caf50' }}>✅ تم بنجاح: {uploadResults.success}</p>
-                                    <p style={{ color: '#f44336' }}>❌ فشل: {uploadResults.failed}</p>
+                                    <h4 style={styles.resultsTitle}>{t('upload_results')}</h4>
+                                    <p style={{ color: '#4caf50' }}>✅ {t('success')}: {uploadResults.success}</p>
+                                    <p style={{ color: '#f44336' }}>❌ {t('failed')}: {uploadResults.failed}</p>
                                     {uploadResults.errors.length > 0 && (
                                         <div style={styles.errorsList}>
-                                            <p style={{ fontWeight: 'bold' }}>الأخطاء:</p>
+                                            <p style={{ fontWeight: 'bold' }}>{t('errors')}:</p>
                                             {uploadResults.errors.map((err, idx) => <p key={idx} style={styles.errorItem}>{err}</p>)}
                                         </div>
                                     )}
@@ -1552,27 +1537,25 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب إدارة الأقسام */}
-                {/* ========================================= */}
+                {/* Departments Tab */}
                 {activeTab === "departments" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>إدارة الأقسام</h3>
+                            <h3 style={styles.sectionTitle}>{t('departments')}</h3>
                             <button onClick={() => setShowDeptForm(!showDeptForm)} style={styles.addButton}>
-                                {showDeptForm ? '❌ إلغاء' : '➕ إضافة قسم'}
+                                {showDeptForm ? `❌ ${t('cancel')}` : `➕ ${t('add_department')}`}
                             </button>
                         </div>
 
                         {showDeptForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>{editingDept ? 'تعديل قسم' : 'إضافة قسم جديد'}</h4>
-                                <input type="text" placeholder="اسم القسم" value={deptName} onChange={e => setDeptName(e.target.value)} style={styles.input} />
+                                <h4 style={styles.formTitle}>{editingDept ? t('edit_department') : t('add_new_department')}</h4>
+                                <input type="text" placeholder={t('department_name')} value={deptName} onChange={e => setDeptName(e.target.value)} style={styles.input} />
                                 <div style={{ display: 'flex', gap: 10 }}>
                                     <button onClick={editingDept ? updateDepartment : addDepartment} style={styles.submitButton}>
-                                        {editingDept ? '✅ حفظ التعديلات' : '✅ إضافة القسم'}
+                                        {editingDept ? `✅ ${t('save_changes')}` : `✅ ${t('add_department')}`}
                                     </button>
-                                    <button onClick={cancelDeptForm} style={{ ...styles.submitButton, backgroundColor: '#9e9e9e' }}>❌ إلغاء</button>
+                                    <button onClick={cancelDeptForm} style={{ ...styles.submitButton, backgroundColor: '#9e9e9e' }}>❌ {t('cancel')}</button>
                                 </div>
                             </div>
                         )}
@@ -1582,15 +1565,15 @@ export default function AdminPage() {
                                 <thead>
                                     <tr>
                                         <th style={styles.tableHeader}>#</th>
-                                        <th style={styles.tableHeader}>اسم القسم</th>
-                                        <th style={styles.tableHeader}>عدد الموظفين</th>
-                                        <th style={styles.tableHeader}>المدراء</th>
-                                        <th style={styles.tableHeader}>الإجراءات</th>
+                                        <th style={styles.tableHeader}>{t('department_name')}</th>
+                                        <th style={styles.tableHeader}>{t('employees_count')}</th>
+                                        <th style={styles.tableHeader}>{t('managers')}</th>
+                                        <th style={styles.tableHeader}>{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {departments.length === 0 ? (
-                                        <tr><td colSpan={5} style={styles.emptyCell}>لا توجد أقسام بعد</td></tr>
+                                        <tr><td colSpan={5} style={styles.emptyCell}>{t('no_departments')}</td></tr>
                                     ) : (
                                         departments.map((dept, index) => (
                                             <tr key={dept.id}>
@@ -1598,7 +1581,7 @@ export default function AdminPage() {
                                                 <td style={styles.tableCell}>{dept.name}</td>
                                                 <td style={styles.tableCell}>
                                                     <span style={{ ...styles.roleBadge, backgroundColor: (dept.employees_count || 0) > 0 ? '#4caf50' : '#9e9e9e' }}>
-                                                        {dept.employees_count || 0} موظف
+                                                        {dept.employees_count || 0} {t('employees')}
                                                     </span>
                                                 </td>
                                                 <td style={styles.tableCell}>
@@ -1609,16 +1592,16 @@ export default function AdminPage() {
                                                                     ...styles.managerBadge,
                                                                     backgroundColor: manager.id === adminId ? '#1976d2' : '#ff9800'
                                                                 }}>
-                                                                    {manager.name} {manager.id === adminId ? '(أنت)' : ''}
+                                                                    {manager.name} {manager.id === adminId ? `(${t('you')})` : ''}
                                                                 </span>
                                                             ))}
                                                         </div>
-                                                    ) : <span style={{ color: '#999' }}>لا يوجد مدراء</span>}
+                                                    ) : <span style={{ color: '#999' }}>{t('no_managers')}</span>}
                                                 </td>
                                                 <td style={styles.tableCell}>
-                                                    <button onClick={() => startEditDept(dept)} style={styles.editButton} title="تعديل">✏️</button>
-                                                    <button onClick={() => openManageManagers(dept)} style={styles.managerButton} title="إدارة المدراء">👥</button>
-                                                    <button onClick={() => deleteDepartment(dept.id)} style={styles.deleteButton} title="حذف" disabled={(dept.employees_count || 0) > 0}>🗑️</button>
+                                                    <button onClick={() => startEditDept(dept)} style={styles.editButton} title={t('edit')}>✏️</button>
+                                                    <button onClick={() => openManageManagers(dept)} style={styles.managerButton} title={t('manage_managers')}>👥</button>
+                                                    <button onClick={() => deleteDepartment(dept.id)} style={styles.deleteButton} title={t('delete')} disabled={(dept.employees_count || 0) > 0}>🗑️</button>
                                                 </td>
                                             </tr>
                                         ))
@@ -1630,24 +1613,24 @@ export default function AdminPage() {
                         {showManageManagers && selectedDept && (
                             <div style={styles.modalOverlay}>
                                 <div style={styles.modal}>
-                                    <h3 style={styles.modalTitle}>إدارة مدراء قسم: {selectedDept.name}</h3>
+                                    <h3 style={styles.modalTitle}>{t('manage_managers_for')} {selectedDept.name}</h3>
                                     <div style={styles.modalContent}>
                                         <div style={styles.modalSection}>
-                                            <h4 style={styles.modalSubTitle}>المدراء الحاليون</h4>
-                                            {deptManagers.length === 0 ? <p style={styles.emptyText}>لا يوجد مدراء</p> : deptManagers.map(rel => (
+                                            <h4 style={styles.modalSubTitle}>{t('current_managers')}</h4>
+                                            {deptManagers.length === 0 ? <p style={styles.emptyText}>{t('no_managers')}</p> : deptManagers.map(rel => (
                                                 <div key={rel.id} style={styles.managerRow}>
                                                     <span>
                                                         {rel.employees?.name} ({rel.employees?.username})
-                                                        {rel.employees?.id === adminId && ' (أنت)'}
+                                                        {rel.employees?.id === adminId && ` (${t('you')})`}
                                                     </span>
                                                     <button onClick={() => removeManagerFromDept(rel.id)} style={styles.smallDeleteButton}>❌</button>
                                                 </div>
                                             ))}
                                         </div>
                                         <div style={styles.modalSection}>
-                                            <h4 style={styles.modalSubTitle}>إضافة مدير</h4>
+                                            <h4 style={styles.modalSubTitle}>{t('add_manager')}</h4>
                                             <select onChange={(e) => addManagerToDept(e.target.value)} style={styles.select} value="">
-                                                <option value="">اختر مدير...</option>
+                                                <option value="">{t('select_manager')}...</option>
                                                 {availableManagers.filter(m => !deptManagers.some((rel: any) => rel.manager_id === m.id)).map(manager => (
                                                     <option key={manager.id} value={manager.id}>
                                                         {manager.name} ({manager.username}) {manager.role === 'admin' ? '⭐' : ''}
@@ -1657,7 +1640,7 @@ export default function AdminPage() {
                                         </div>
                                     </div>
                                     <div style={styles.modalFooter}>
-                                        <button onClick={() => setShowManageManagers(false)} style={styles.closeButton}>إغلاق</button>
+                                        <button onClick={() => setShowManageManagers(false)} style={styles.closeButton}>{t('close')}</button>
                                     </div>
                                 </div>
                             </div>
@@ -1665,53 +1648,51 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب جميع طلبات الموظفين */}
-                {/* ========================================= */}
+                {/* All Requests Tab */}
                 {activeTab === "allRequests" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>جميع طلبات الموظفين</h3>
+                        <h3 style={styles.sectionTitle}>{t('all_requests')}</h3>
 
                         <div style={styles.filterSection}>
                             <select value={requestsFilter} onChange={e => setRequestsFilter(e.target.value as any)} style={styles.select}>
-                                <option value="all">كل الحالات</option>
-                                <option value="pending">⏳ قيد الانتظار</option>
-                                <option value="approved">✅ معتمدة</option>
-                                <option value="rejected">❌ مرفوضة</option>
+                                <option value="all">{t('all')}</option>
+                                <option value="pending">{t('pending')}</option>
+                                <option value="approved">{t('approved')}</option>
+                                <option value="rejected">{t('rejected')}</option>
                             </select>
                             <select value={requestsType} onChange={e => setRequestsType(e.target.value as any)} style={styles.select}>
-                                <option value="all">كل الأنواع</option>
-                                <option value="leave">🏖️ إجازات</option>
-                                <option value="overtime">⏰ أوفر تايم</option>
-                                <option value="permission">⏳ إذون</option>
-                                <option value="correction">🔧 تصحيح بصمة</option>
+                                <option value="all">{t('all_types')}</option>
+                                <option value="leave">{t('leave')}</option>
+                                <option value="overtime">{t('overtime')}</option>
+                                <option value="permission">{t('permission')}</option>
+                                <option value="correction">{t('correction')}</option>
                             </select>
                             <select value={requestsDept} onChange={e => setRequestsDept(e.target.value)} style={styles.select}>
-                                <option value="all">كل الأقسام</option>
+                                <option value="all">{t('all_departments')}</option>
                                 {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
                             </select>
-                            <input type="date" value={requestsDateFromAll} onChange={e => setRequestsDateFromAll(e.target.value)} style={styles.dateInput} placeholder="من" />
-                            <input type="date" value={requestsDateToAll} onChange={e => setRequestsDateToAll(e.target.value)} style={styles.dateInput} placeholder="إلى" />
-                            <button onClick={fetchAllRequests} style={styles.viewButton}>بحث</button>
+                            <input type="date" value={requestsDateFromAll} onChange={e => setRequestsDateFromAll(e.target.value)} style={styles.dateInput} placeholder={t('from')} />
+                            <input type="date" value={requestsDateToAll} onChange={e => setRequestsDateToAll(e.target.value)} style={styles.dateInput} placeholder={t('to')} />
+                            <button onClick={fetchAllRequests} style={styles.viewButton}>{t('search')}</button>
                         </div>
 
                         <div style={styles.tableContainer}>
                             <table style={styles.table}>
                                 <thead>
                                     <tr>
-                                        <th style={styles.tableHeader}>الموظف</th>
-                                        <th style={styles.tableHeader}>القسم</th>
-                                        <th style={styles.tableHeader}>نوع الطلب</th>
-                                        <th style={styles.tableHeader}>التفاصيل</th>
-                                        <th style={styles.tableHeader}>الحالة</th>
-                                        <th style={styles.tableHeader}>الإجراءات</th>
+                                        <th style={styles.tableHeader}>{t('employee')}</th>
+                                        <th style={styles.tableHeader}>{t('department')}</th>
+                                        <th style={styles.tableHeader}>{t('request_type')}</th>
+                                        <th style={styles.tableHeader}>{t('details')}</th>
+                                        <th style={styles.tableHeader}>{t('status')}</th>
+                                        <th style={styles.tableHeader}>{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan={6} style={styles.emptyCell}>جاري التحميل...</td></tr>
+                                        <tr><td colSpan={6} style={styles.emptyCell}>{t('loading')}</td></tr>
                                     ) : allRequests.length === 0 ? (
-                                        <tr><td colSpan={6} style={styles.emptyCell}>لا توجد طلبات</td></tr>
+                                        <tr><td colSpan={6} style={styles.emptyCell}>{t('no_requests')}</td></tr>
                                     ) : (
                                         allRequests.map(req => {
                                             const deptName = departments.find(d => d.id === req.employees?.department_id)?.name || "-"
@@ -1720,16 +1701,16 @@ export default function AdminPage() {
                                             const isAdminManagerForThisDept = adminManagedDepts.includes(req.employees?.department_id)
 
                                             let details = ""
-                                            if (req.requestType === "leave") details = `${req.leave_type} - من ${req.start_date} إلى ${req.end_date}`
-                                            else if (req.requestType === "overtime") details = `${req.date} - ${req.hours} ساعة`
+                                            if (req.requestType === "leave") details = `${req.leave_type} - ${t('from')} ${req.start_date} ${t('to')} ${req.end_date}`
+                                            else if (req.requestType === "overtime") details = `${req.date} - ${req.hours} ${t('hours')}`
                                             else if (req.requestType === "permission") {
                                                 details = `${req.date} - ${req.permission_type}`
-                                                if (req.start_time) details += ` من ${req.start_time}`
-                                                if (req.end_time) details += ` إلى ${req.end_time}`
+                                                if (req.start_time) details += ` ${t('from')} ${req.start_time}`
+                                                if (req.end_time) details += ` ${t('to')} ${req.end_time}`
                                             } else if (req.requestType === "correction") {
                                                 details = `${req.date}`
-                                                if (req.expected_check_in) details += ` - حضور: ${req.expected_check_in}`
-                                                if (req.expected_check_out) details += ` - انصراف: ${req.expected_check_out}`
+                                                if (req.expected_check_in) details += ` - ${t('check_in')}: ${req.expected_check_in}`
+                                                if (req.expected_check_out) details += ` - ${t('check_out')}: ${req.expected_check_out}`
                                             }
 
                                             return (
@@ -1742,60 +1723,40 @@ export default function AdminPage() {
                                                     <td style={styles.tableCell}>{details}</td>
                                                     <td style={styles.tableCell}>
                                                         {req.status === "مرفوضة" ? (
-                                                            <span style={{
-                                                                ...styles.approvalBadge,
-                                                                backgroundColor: '#ffebee',
-                                                                color: '#f44336',
-                                                                border: '1px solid #f44336'
-                                                            }}>
-                                                                ❌ مرفوضة
+                                                            <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
+                                                                ❌ {t('rejected')}
                                                             </span>
                                                         ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
-                                                            <span style={{
-                                                                ...styles.approvalBadge,
-                                                                backgroundColor: '#e8f5e9',
-                                                                color: '#2e7d32',
-                                                                border: '1px solid #4caf50'
-                                                            }}>
-                                                                ✅ معتمدة
+                                                            <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
+                                                                ✅ {t('approved')}
                                                             </span>
                                                         ) : (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                                <span style={{
-                                                                    ...styles.approvalBadge,
-                                                                    backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
-                                                                    color: req.hr_approved ? '#2e7d32' : '#ed6c02',
-                                                                    border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
-                                                                }}>
-                                                                    HR: {req.hr_approved ? '✅ موافق' : '⏳ في انتظار'}
+                                                                <span style={{ ...styles.approvalBadge, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', color: req.hr_approved ? '#2e7d32' : '#ed6c02', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                                    HR: {req.hr_approved ? '✅' : '⏳'}
                                                                 </span>
-                                                                <span style={{
-                                                                    ...styles.approvalBadge,
-                                                                    backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
-                                                                    color: req.manager_approved ? '#2e7d32' : '#ed6c02',
-                                                                    border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
-                                                                }}>
-                                                                    Manager: {req.manager_approved ? '✅ موافق' : '⏳ في انتظار'}
+                                                                <span style={{ ...styles.approvalBadge, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', color: req.manager_approved ? '#2e7d32' : '#ed6c02', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                                    {t('manager')}: {req.manager_approved ? '✅' : '⏳'}
                                                                 </span>
                                                             </div>
                                                         )}
-                                                        {req.pending_from && <div style={styles.pendingInfo}>في انتظار: {req.pending_from}</div>}
+                                                        {req.pending_from && <div style={styles.pendingInfo}>{t('pending_from')}: {req.pending_from}</div>}
                                                         {isAdminManagerForThisDept && !req.hr_approved && req.status === "قيد الانتظار" && (
-                                                            <div style={{ ...styles.pendingInfo, color: '#1976d2' }}>⭐ أنت مدير لهذا القسم</div>
+                                                            <div style={{ ...styles.pendingInfo, color: '#1976d2' }}>⭐ {t('you_are_manager')}</div>
                                                         )}
                                                     </td>
                                                     <td style={styles.tableCell}>
                                                         {canApprove && (
                                                             <>
-                                                                <button onClick={() => approveAnyRequest(req)} style={styles.approveButton} title={isAdminManagerForThisDept ? "موافقة كاملة (كمدير وHR)" : "موافقة كـ HR"}>
+                                                                <button onClick={() => approveAnyRequest(req)} style={styles.approveButton} title={isAdminManagerForThisDept ? t('approve_as_manager_and_hr') : t('approve_as_hr')}>
                                                                     ✓
                                                                 </button>
-                                                                <button onClick={() => rejectAnyRequest(req)} style={styles.rejectButton} title="رفض">
+                                                                <button onClick={() => rejectAnyRequest(req)} style={styles.rejectButton} title={t('reject')}>
                                                                     ✗
                                                                 </button>
                                                             </>
                                                         )}
-                                                        {req.hr_approved && req.status === "قيد الانتظار" && <span style={styles.approvedBadge}>✅ وافقت HR</span>}
+                                                        {req.hr_approved && req.status === "قيد الانتظار" && <span style={styles.approvedBadge}>✅ {t('hr_approved')}</span>}
                                                     </td>
                                                 </tr>
                                             )
@@ -1807,30 +1768,28 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب التقارير الموحد */}
-                {/* ========================================= */}
+                {/* Reports Tab */}
                 {activeTab === "reports" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>التقارير</h3>
+                        <h3 style={styles.sectionTitle}>{t('reports')}</h3>
 
                         <div style={styles.filterSection}>
                             <select value={reportType} onChange={e => setReportType(e.target.value as "leaves" | "absences" | "attendance")} style={styles.select}>
-                                <option value="leaves">تقرير الإجازات</option>
-                                <option value="absences">تقرير الغياب</option>
-                                <option value="attendance">تقرير الحضور والانصراف</option>
+                                <option value="leaves">{t('leaves_report')}</option>
+                                <option value="absences">{t('absences_report')}</option>
+                                <option value="attendance">{t('attendance_report')}</option>
                             </select>
 
                             <select value={reportDepartment} onChange={e => setReportDepartment(e.target.value)} style={styles.select}>
-                                <option value="all">كل الأقسام</option>
+                                <option value="all">{t('all_departments')}</option>
                                 {departments.map(dept => (
                                     <option key={dept.id} value={dept.id}>{dept.name}</option>
                                 ))}
                             </select>
 
-                            <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={styles.dateInput} placeholder="من" />
-                            <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={styles.dateInput} placeholder="إلى" />
-                            <button onClick={fetchReport} style={styles.viewButton}>عرض التقرير</button>
+                            <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={styles.dateInput} placeholder={t('from')} />
+                            <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={styles.dateInput} placeholder={t('to')} />
+                            <button onClick={fetchReport} style={styles.viewButton}>{t('view_report')}</button>
                         </div>
 
                         {reportType !== "attendance" && (
@@ -1840,27 +1799,27 @@ export default function AdminPage() {
                                         <tr>
                                             {reportType === "leaves" ? (
                                                 <>
-                                                    <th style={styles.tableHeader}>الموظف</th>
-                                                    <th style={styles.tableHeader}>القسم</th>
-                                                    <th style={styles.tableHeader}>نوع الإجازة</th>
-                                                    <th style={styles.tableHeader}>من</th>
-                                                    <th style={styles.tableHeader}>إلى</th>
-                                                    <th style={styles.tableHeader}>عدد الأيام</th>
+                                                    <th style={styles.tableHeader}>{t('employee')}</th>
+                                                    <th style={styles.tableHeader}>{t('department')}</th>
+                                                    <th style={styles.tableHeader}>{t('leave_type')}</th>
+                                                    <th style={styles.tableHeader}>{t('from')}</th>
+                                                    <th style={styles.tableHeader}>{t('to')}</th>
+                                                    <th style={styles.tableHeader}>{t('days')}</th>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <th style={styles.tableHeader}>الموظف</th>
-                                                    <th style={styles.tableHeader}>القسم</th>
-                                                    <th style={styles.tableHeader}>أيام الغياب</th>
+                                                    <th style={styles.tableHeader}>{t('employee')}</th>
+                                                    <th style={styles.tableHeader}>{t('department')}</th>
+                                                    <th style={styles.tableHeader}>{t('absent_days')}</th>
                                                 </>
                                             )}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {loading ? (
-                                            <tr><td colSpan={6} style={styles.emptyCell}>جاري التحميل...</td></tr>
+                                            <tr><td colSpan={6} style={styles.emptyCell}>{t('loading')}</td></tr>
                                         ) : reportData.length === 0 ? (
-                                            <tr><td colSpan={6} style={styles.emptyCell}>لا توجد بيانات في هذه الفترة</td></tr>
+                                            <tr><td colSpan={6} style={styles.emptyCell}>{t('no_data_period')}</td></tr>
                                         ) : (
                                             reportData.map((item, index) => (
                                                 <tr key={index}>
@@ -1895,11 +1854,11 @@ export default function AdminPage() {
                                 <div style={styles.summaryStats}>
                                     <div style={styles.statCard}>
                                         <span style={styles.statValue}>{Object.keys(groupedAttendance).length}</span>
-                                        <span style={styles.statLabel}>موظفين</span>
+                                        <span style={styles.statLabel}>{t('employees')}</span>
                                     </div>
                                     <div style={styles.statCard}>
                                         <span style={styles.statValue}>{reportData.length}</span>
-                                        <span style={styles.statLabel}>أيام عمل</span>
+                                        <span style={styles.statLabel}>{t('work_days')}</span>
                                     </div>
                                 </div>
 
@@ -1909,29 +1868,29 @@ export default function AdminPage() {
                                         return (
                                             <div key={user.employee_id} style={styles.resultCard}>
                                                 <div
-                                                    style={{ cursor: "pointer", fontWeight: "bold", fontSize: 16 }}
+                                                    style={{ cursor: "pointer", fontWeight: "bold", fontSize: 16, color: '#000000' }}
                                                     onClick={() => setExpandedUser(expandedUser === user.employee_id ? null : user.employee_id)}
                                                 >
                                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                                         <span>{user.name}</span>
                                                         <span style={{ color: "#1976d2" }}>{deptName}</span>
                                                     </div>
-                                                    <div style={{ fontSize: 14, color: '#666', marginTop: 5 }}>
-                                                        إجمالي الساعات: {user.totalHours.toFixed(2)} ساعة |
-                                                        أيام العمل: {user.totalDays} يوم |
-                                                        متوسط: {(user.totalHours / user.totalDays).toFixed(2)} ساعة/يوم
+                                                    <div style={{ fontSize: 14, color: '#000000', marginTop: 5 }}>
+                                                        {t('total_hours')}: {user.totalHours.toFixed(2)} {t('hours')} |
+                                                        {t('work_days')}: {user.totalDays} {t('days')} |
+                                                        {t('average')}: {(user.totalHours / user.totalDays).toFixed(2)} {t('hours_per_day')}
                                                     </div>
                                                 </div>
 
                                                 {expandedUser === user.employee_id && (
                                                     <div style={{ marginTop: 15 }}>
-                                                        <table style={{ width: '100%', fontSize: 13 }}>
+                                                        <table style={{ width: '100%', fontSize: 13, color: '#000000' }}>
                                                             <thead>
                                                                 <tr style={{ backgroundColor: '#f0f0f0' }}>
-                                                                    <th style={{ padding: 8, textAlign: 'center' }}>اليوم</th>
-                                                                    <th style={{ padding: 8, textAlign: 'center' }}>الحضور</th>
-                                                                    <th style={{ padding: 8, textAlign: 'center' }}>الانصراف</th>
-                                                                    <th style={{ padding: 8, textAlign: 'center' }}>الساعات</th>
+                                                                    <th style={{ padding: 8, textAlign: 'center' }}>{t('date')}</th>
+                                                                    <th style={{ padding: 8, textAlign: 'center' }}>{t('check_in')}</th>
+                                                                    <th style={{ padding: 8, textAlign: 'center' }}>{t('check_out')}</th>
+                                                                    <th style={{ padding: 8, textAlign: 'center' }}>{t('hours')}</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
@@ -1940,7 +1899,7 @@ export default function AdminPage() {
                                                                         <td style={{ padding: 6, textAlign: 'center' }}>{rec.day}</td>
                                                                         <td style={{ padding: 6, textAlign: 'center' }}>{formatTime(rec.check_in)}</td>
                                                                         <td style={{ padding: 6, textAlign: 'center' }}>{formatTime(rec.check_out)}</td>
-                                                                        <td style={{ padding: 6, textAlign: 'center' }}>{rec.hours} ساعة</td>
+                                                                        <td style={{ padding: 6, textAlign: 'center' }}>{rec.hours} {t('hours')}</td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
@@ -1955,46 +1914,44 @@ export default function AdminPage() {
                         )}
 
                         {reportType === "attendance" && reportData.length === 0 && reportFrom && reportTo && (
-                            <p style={styles.emptyCell}>لا توجد بيانات حضور في هذه الفترة</p>
+                            <p style={styles.emptyCell}>{t('no_attendance_data')}</p>
                         )}
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب تسجيل حضور الأدمن */}
-                {/* ========================================= */}
+                {/* Attendance Tab */}
                 {activeTab === "attendance" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>تسجيل حضوري</h3>
+                        <h3 style={styles.sectionTitle}>{t('my_attendance')}</h3>
                         <div style={styles.attendanceCard}>
-                            <div style={styles.locationStatus}>{loadingPos ? "⏳ جاري الحصول على الموقع..." : "📍 تم الحصول على الموقع بنجاح"}</div>
+                            <div style={styles.locationStatus}>{loadingPos ? t('getting_location') : t('location_success')}</div>
                             <div style={styles.buttonGroup}>
-                                <button onClick={() => handleCheck("check_in")} style={styles.checkInButton} disabled={loadingPos}>🟢 تسجيل حضور</button>
-                                <button onClick={() => handleCheck("check_out")} style={styles.checkOutButton} disabled={loadingPos}>🔴 تسجيل انصراف</button>
+                                <button onClick={() => handleCheck("check_in")} style={styles.checkInButton} disabled={loadingPos}>🟢 {t('check_in')}</button>
+                                <button onClick={() => handleCheck("check_out")} style={styles.checkOutButton} disabled={loadingPos}>🔴 {t('check_out')}</button>
                             </div>
-                            <h4 style={styles.subTitle}>حضور اليوم</h4>
+                            <h4 style={styles.subTitle}>{t('today_attendance')}</h4>
                             <div style={styles.tableContainer}>
                                 <table style={styles.table}>
-                                    <thead><tr><th style={styles.tableHeader}>اليوم</th><th style={styles.tableHeader}>الحضور</th><th style={styles.tableHeader}>الانصراف</th></tr></thead>
+                                    <thead><tr><th style={styles.tableHeader}>{t('date')}</th><th style={styles.tableHeader}>{t('check_in')}</th><th style={styles.tableHeader}>{t('check_out')}</th></tr></thead>
                                     <tbody>
                                         {todayAttendance ? (
                                             <tr><td style={styles.tableCell}>{todayAttendance.day}</td><td style={styles.tableCell}>{formatTime(todayAttendance.check_in)}</td><td style={styles.tableCell}>{formatTime(todayAttendance.check_out)}</td></tr>
-                                        ) : <tr><td colSpan={3} style={styles.emptyCell}>لم يتم تسجيل حضور اليوم بعد</td></tr>}
+                                        ) : <tr><td colSpan={3} style={styles.emptyCell}>{t('no_attendance_today')}</td></tr>}
                                     </tbody>
                                 </table>
                             </div>
-                            <h4 style={{ ...styles.subTitle, marginTop: 20 }}>سجل الحضور السابق</h4>
+                            <h4 style={{ ...styles.subTitle, marginTop: 20 }}>{t('attendance_history')}</h4>
                             <div style={styles.filterRow}>
                                 <input type="date" value={attendanceFrom} onChange={e => setAttendanceFrom(e.target.value)} style={styles.dateInput} />
                                 <input type="date" value={attendanceTo} onChange={e => setAttendanceTo(e.target.value)} style={styles.dateInput} />
-                                <button onClick={fetchAttendanceHistory} style={styles.viewButton}>عرض</button>
+                                <button onClick={fetchAttendanceHistory} style={styles.viewButton}>{t('view')}</button>
                             </div>
                             <div style={styles.tableContainer}>
                                 <table style={styles.table}>
-                                    <thead><tr><th style={styles.tableHeader}>اليوم</th><th style={styles.tableHeader}>الحضور</th><th style={styles.tableHeader}>الانصراف</th></tr></thead>
+                                    <thead><tr><th style={styles.tableHeader}>{t('date')}</th><th style={styles.tableHeader}>{t('check_in')}</th><th style={styles.tableHeader}>{t('check_out')}</th></tr></thead>
                                     <tbody>
                                         {attendanceHistory.length === 0 ? (
-                                            <tr><td colSpan={3} style={styles.emptyCell}>اختر الفترة لعرض السجل</td></tr>
+                                            <tr><td colSpan={3} style={styles.emptyCell}>{t('select_dates_to_view')}</td></tr>
                                         ) : (
                                             attendanceHistory.map(att => (
                                                 <tr key={att.id}><td style={styles.tableCell}>{att.day}</td><td style={styles.tableCell}>{formatTime(att.check_in)}</td><td style={styles.tableCell}>{formatTime(att.check_out)}</td></tr>
@@ -2007,91 +1964,78 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب طلبات الإجازات */}
-                {/* ========================================= */}
+                {/* Leave Tab */}
                 {activeTab === "leave" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات الإجازات</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_leaves')}</h3>
                             <button onClick={() => setShowLeaveForm(!showLeaveForm)} style={styles.addButton}>
-                                {showLeaveForm ? '❌ إلغاء' : '➕ طلب إجازة'}
+                                {showLeaveForm ? `❌ ${t('cancel')}` : `➕ ${t('request_leave')}`}
                             </button>
                         </div>
 
-                        {/* كرت رصيد الإجازات */}
                         <div style={styles.balanceCard}>
-                            <h4 style={styles.balanceTitle}>رصيد الإجازات</h4>
+                            <h4 style={styles.balanceTitle}>{t('leave_balance')}</h4>
                             {leaveBalance.message && (
                                 <p style={styles.balanceMessage}>{leaveBalance.message}</p>
                             )}
 
                             <div style={styles.balanceRow}>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>السنوية (إجمالي)</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.total} يوم</span>
+                                    <span style={styles.balanceLabel}>{t('annual_total')}</span>
+                                    <span style={styles.balanceValue}>{leaveBalance.total} {t('days')}</span>
                                 </div>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>مستخدم</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.used} يوم</span>
+                                    <span style={styles.balanceLabel}>{t('used')}</span>
+                                    <span style={styles.balanceValue}>{leaveBalance.used} {t('days')}</span>
                                 </div>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>المتبقي</span>
-                                    <span style={{
-                                        ...styles.balanceValue,
-                                        color: leaveBalance.remaining > 0 ? '#4caf50' : '#f44336',
-                                        fontWeight: 'bold'
-                                    }}>
-                                        {leaveBalance.remaining} يوم
+                                    <span style={styles.balanceLabel}>{t('remaining')}</span>
+                                    <span style={{ ...styles.balanceValue, color: leaveBalance.remaining > 0 ? '#4caf50' : '#f44336', fontWeight: 'bold' }}>
+                                        {leaveBalance.remaining} {t('days')}
                                     </span>
                                 </div>
                             </div>
 
-                            {/* خط فاصل */}
                             <hr style={styles.balanceDivider} />
 
-                            {/* رصيد الإجازة العارضة */}
                             <div style={styles.emergencyRow}>
                                 <div style={styles.emergencyItem}>
-                                    <span style={styles.emergencyLabel}>إجازة عارضة</span>
+                                    <span style={styles.emergencyLabel}>{t('emergency_leave')}</span>
                                     <span style={styles.emergencyValue}>
-                                        {leaveBalance.emergency_remaining} / {leaveBalance.emergency_total} يوم
+                                        {leaveBalance.emergency_remaining} / {leaveBalance.emergency_total} {t('days')}
                                     </span>
                                 </div>
                                 <div style={styles.emergencyProgress}>
-                                    <div style={{
-                                        ...styles.emergencyProgressBar,
-                                        width: `${(leaveBalance.emergency_used / leaveBalance.emergency_total) * 100}%`
-                                    }} />
+                                    <div style={{ ...styles.emergencyProgressBar, width: `${(leaveBalance.emergency_used / leaveBalance.emergency_total) * 100}%` }} />
                                 </div>
                             </div>
                         </div>
 
-                        {/* نموذج إضافة طلب إجازة */}
                         {showLeaveForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب إجازة جديد</h4>
+                                <h4 style={styles.formTitle}>{t('new_leave_request')}</h4>
 
                                 <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={styles.select}>
-                                    <option value="سنوية">إجازة سنوية</option>
-                                    <option value="مرضية">إجازة مرضية</option>
-                                    <option value="عارضة">إجازة عارضة</option>
-                                    <option value="غير مدفوعة">إجازة غير مدفوعة</option>
+                                    <option value="سنوية">{t('annual_leave')}</option>
+                                    <option value="مرضية">{t('sick_leave')}</option>
+                                    <option value="عارضة">{t('emergency_leave')}</option>
+                                    <option value="غير مدفوعة">{t('unpaid_leave')}</option>
                                 </select>
 
                                 <div style={styles.dateRow}>
                                     <div style={styles.dateField}>
-                                        <label style={styles.label}>من:</label>
+                                        <label style={styles.label}>{t('from')}:</label>
                                         <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} style={styles.dateInput} />
                                     </div>
                                     <div style={styles.dateField}>
-                                        <label style={styles.label}>إلى:</label>
+                                        <label style={styles.label}>{t('to')}:</label>
                                         <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} style={styles.dateInput} />
                                     </div>
                                 </div>
 
                                 <textarea
-                                    placeholder="السبب (اختياري)"
+                                    placeholder={t('reason_optional')}
                                     value={leaveReason}
                                     onChange={e => setLeaveReason(e.target.value)}
                                     style={styles.textarea}
@@ -2099,16 +2043,15 @@ export default function AdminPage() {
                                 />
 
                                 <button onClick={submitLeaveRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        {/* قائمة طلبات الإجازات السابقة */}
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {leaveRequests.length === 0 && !showLeaveForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {leaveRequests.map(req => {
                                 const status = getApprovalStatus(req)
@@ -2117,48 +2060,24 @@ export default function AdminPage() {
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{req.leave_type}</span>
                                             {req.status === "مرفوضة" ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#ffebee',
-                                                    color: '#f44336',
-                                                    border: '1px solid #f44336'
-                                                }}>
-                                                    ❌ مرفوضة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#e8f5e9',
-                                                    color: '#2e7d32',
-                                                    border: '1px solid #4caf50'
-                                                }}>
-                                                    ✅ معتمدة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
                                                         <span style={styles.approvalLabel}>HR</span>
-                                                        <span style={{
-                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                        <span style={{ color: req.hr_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.hr_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
-                                                        <span style={{
-                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
+                                                        <span style={{ color: req.manager_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.manager_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
@@ -2167,21 +2086,18 @@ export default function AdminPage() {
                                         </div>
 
                                         <p style={styles.requestDates}>
-                                            من {formatDate(req.start_date)} إلى {formatDate(req.end_date)}
+                                            {t('from')} {formatDate(req.start_date)} {t('to')} {formatDate(req.end_date)}
                                         </p>
 
-                                        {req.reason && <p style={styles.requestReason}>السبب: {req.reason}</p>}
+                                        {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && (
-                                                <button
-                                                    onClick={() => deleteLeaveRequest(req.id)}
-                                                    style={styles.deleteButton}
-                                                >
-                                                    🗑️ حذف
+                                                <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -2192,109 +2108,68 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب طلبات الأوفر تايم */}
-                {/* ========================================= */}
+                {/* Overtime Tab */}
                 {activeTab === "overtime" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات الأوفر تايم</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_overtime')}</h3>
                             <button onClick={() => setShowOvertimeForm(!showOvertimeForm)} style={styles.addButton}>
-                                {showOvertimeForm ? '❌ إلغاء' : '➕ طلب أوفر تايم'}
+                                {showOvertimeForm ? `❌ ${t('cancel')}` : `➕ ${t('request_overtime')}`}
                             </button>
                         </div>
 
                         {showOvertimeForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب أوفر تايم جديد</h4>
+                                <h4 style={styles.formTitle}>{t('new_overtime_request')}</h4>
 
                                 <div style={styles.dateField}>
-                                    <label style={styles.label}>التاريخ:</label>
+                                    <label style={styles.label}>{t('date')}:</label>
                                     <input type="date" value={overtimeDate} onChange={e => setOvertimeDate(e.target.value)} style={styles.dateInput} />
                                 </div>
 
                                 <div style={styles.hoursField}>
-                                    <label style={styles.label}>عدد الساعات:</label>
-                                    <input
-                                        type="number"
-                                        step="0.5"
-                                        min="0.5"
-                                        max="12"
-                                        value={overtimeHours}
-                                        onChange={e => setOvertimeHours(e.target.value)}
-                                        style={styles.input}
-                                        placeholder="مثال: 2.5"
-                                    />
+                                    <label style={styles.label}>{t('hours')}:</label>
+                                    <input type="number" step="0.5" min="0.5" max="12" value={overtimeHours} onChange={e => setOvertimeHours(e.target.value)} style={styles.input} placeholder={t('example_2_5')} />
                                 </div>
 
-                                <textarea
-                                    placeholder="السبب (اختياري)"
-                                    value={overtimeReason}
-                                    onChange={e => setOvertimeReason(e.target.value)}
-                                    style={styles.textarea}
-                                    rows={3}
-                                />
+                                <textarea placeholder={t('reason_optional')} value={overtimeReason} onChange={e => setOvertimeReason(e.target.value)} style={styles.textarea} rows={3} />
 
                                 <button onClick={submitOvertimeRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {overtimeRequests.length === 0 && !showOvertimeForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {overtimeRequests.map(req => {
                                 const status = getApprovalStatus(req)
                                 return (
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>أوفر تايم</span>
+                                            <span style={styles.requestType}>{t('overtime')}</span>
                                             {req.status === "مرفوضة" ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#ffebee',
-                                                    color: '#f44336',
-                                                    border: '1px solid #f44336'
-                                                }}>
-                                                    ❌ مرفوضة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#e8f5e9',
-                                                    color: '#2e7d32',
-                                                    border: '1px solid #4caf50'
-                                                }}>
-                                                    ✅ معتمدة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
                                                         <span style={styles.approvalLabel}>HR</span>
-                                                        <span style={{
-                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                        <span style={{ color: req.hr_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.hr_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
-                                                        <span style={{
-                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
+                                                        <span style={{ color: req.manager_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.manager_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
@@ -2302,20 +2177,17 @@ export default function AdminPage() {
                                             )}
                                         </div>
 
-                                        <p style={styles.requestDates}>التاريخ: {req.date}</p>
-                                        <p style={styles.requestReason}>عدد الساعات: {req.hours} ساعة</p>
-                                        {req.reason && <p style={styles.requestReason}>السبب: {req.reason}</p>}
+                                        <p style={styles.requestDates}>{t('date')}: {req.date}</p>
+                                        <p style={styles.requestReason}>{t('hours')}: {req.hours} {t('hours')}</p>
+                                        {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && (
-                                                <button
-                                                    onClick={() => deleteOvertimeRequest(req.id)}
-                                                    style={styles.deleteButton}
-                                                >
-                                                    🗑️ حذف
+                                                <button onClick={() => deleteOvertimeRequest(req.id)} style={styles.deleteButton}>
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -2326,146 +2198,89 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب طلبات الإذن */}
-                {/* ========================================= */}
+                {/* Permission Tab */}
                 {activeTab === "permission" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات الإذن</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_permissions')}</h3>
                             <button onClick={() => setShowPermissionForm(!showPermissionForm)} style={styles.addButton}>
-                                {showPermissionForm ? '❌ إلغاء' : '➕ طلب إذن'}
+                                {showPermissionForm ? `❌ ${t('cancel')}` : `➕ ${t('request_permission')}`}
                             </button>
                         </div>
 
                         {showPermissionForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب إذن</h4>
+                                <h4 style={styles.formTitle}>{t('new_permission_request')}</h4>
 
-                                <select
-                                    value={permissionType}
-                                    onChange={e => setPermissionType(e.target.value)}
-                                    style={styles.select}
-                                >
-                                    <option value="ساعة">إذن ساعة</option>
-                                    <option value="ساعتين">إذن ساعتين</option>
-                                    <option value="نص يوم">إذن نص يوم</option>
+                                <select value={permissionType} onChange={e => setPermissionType(e.target.value)} style={styles.select}>
+                                    <option value="ساعة">{t('one_hour')}</option>
+                                    <option value="ساعتين">{t('two_hours')}</option>
+                                    <option value="نص يوم">{t('half_day')}</option>
                                 </select>
 
                                 <div style={styles.dateField}>
-                                    <label style={styles.label}>التاريخ:</label>
-                                    <input
-                                        type="date"
-                                        value={permissionDate}
-                                        onChange={e => setPermissionDate(e.target.value)}
-                                        style={styles.dateInput}
-                                    />
+                                    <label style={styles.label}>{t('date')}:</label>
+                                    <input type="date" value={permissionDate} onChange={e => setPermissionDate(e.target.value)} style={styles.dateInput} />
                                 </div>
 
                                 {(permissionType === "ساعة" || permissionType === "ساعتين") && (
                                     <div style={styles.timeField}>
-                                        <label style={styles.label}>وقت بداية الإذن:</label>
-                                        <input
-                                            type="time"
-                                            value={permissionStartTime}
-                                            onChange={e => setPermissionStartTime(e.target.value)}
-                                            style={styles.input}
-                                        />
+                                        <label style={styles.label}>{t('start_time')}:</label>
+                                        <input type="time" value={permissionStartTime} onChange={e => setPermissionStartTime(e.target.value)} style={styles.input} />
                                     </div>
                                 )}
 
                                 {permissionType === "نص يوم" && (
                                     <div style={styles.timeRow}>
                                         <div style={styles.timeField}>
-                                            <label style={styles.label}>من:</label>
-                                            <input
-                                                type="time"
-                                                value={permissionStartTime}
-                                                onChange={e => setPermissionStartTime(e.target.value)}
-                                                style={styles.input}
-                                            />
+                                            <label style={styles.label}>{t('from')}:</label>
+                                            <input type="time" value={permissionStartTime} onChange={e => setPermissionStartTime(e.target.value)} style={styles.input} />
                                         </div>
                                         <div style={styles.timeField}>
-                                            <label style={styles.label}>إلى:</label>
-                                            <input
-                                                type="time"
-                                                value={permissionEndTime}
-                                                onChange={e => setPermissionEndTime(e.target.value)}
-                                                style={styles.input}
-                                            />
+                                            <label style={styles.label}>{t('to')}:</label>
+                                            <input type="time" value={permissionEndTime} onChange={e => setPermissionEndTime(e.target.value)} style={styles.input} />
                                         </div>
                                     </div>
                                 )}
 
-                                <textarea
-                                    placeholder="سبب طلب الإذن"
-                                    value={permissionReason}
-                                    onChange={e => setPermissionReason(e.target.value)}
-                                    style={styles.textarea}
-                                    rows={3}
-                                    required
-                                />
+                                <textarea placeholder={t('reason_required')} value={permissionReason} onChange={e => setPermissionReason(e.target.value)} style={styles.textarea} rows={3} required />
 
                                 <button onClick={submitPermissionRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {permissionRequests.length === 0 && !showPermissionForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {permissionRequests.map(req => {
                                 const status = getApprovalStatus(req)
                                 return (
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>إذن {req.permission_type}</span>
+                                            <span style={styles.requestType}>{t('permission')} {req.permission_type}</span>
                                             {req.status === "مرفوضة" ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#ffebee',
-                                                    color: '#f44336',
-                                                    border: '1px solid #f44336'
-                                                }}>
-                                                    ❌ مرفوضة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#e8f5e9',
-                                                    color: '#2e7d32',
-                                                    border: '1px solid #4caf50'
-                                                }}>
-                                                    ✅ معتمدة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
                                                         <span style={styles.approvalLabel}>HR</span>
-                                                        <span style={{
-                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                        <span style={{ color: req.hr_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.hr_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
-                                                        <span style={{
-                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
+                                                        <span style={{ color: req.manager_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.manager_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
@@ -2473,28 +2288,25 @@ export default function AdminPage() {
                                             )}
                                         </div>
 
-                                        <p style={styles.requestDates}>التاريخ: {req.date}</p>
+                                        <p style={styles.requestDates}>{t('date')}: {req.date}</p>
 
                                         {req.start_time && (
                                             <p style={styles.requestReason}>
                                                 {req.permission_type === "نص يوم"
-                                                    ? `من ${req.start_time} إلى ${req.end_time || "?"}`
-                                                    : `بداية من ${req.start_time}`}
+                                                    ? `${t('from')} ${req.start_time} ${t('to')} ${req.end_time || "?"}`
+                                                    : `${t('from')} ${req.start_time}`}
                                             </p>
                                         )}
 
-                                        <p style={styles.requestReason}>السبب: {req.reason}</p>
+                                        <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && (
-                                                <button
-                                                    onClick={() => deletePermissionRequest(req.id)}
-                                                    style={styles.deleteButton}
-                                                >
-                                                    🗑️ حذف
+                                                <button onClick={() => deletePermissionRequest(req.id)} style={styles.deleteButton}>
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -2505,123 +2317,74 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب طلبات تصحيح البصمة */}
-                {/* ========================================= */}
+                {/* Correction Tab */}
                 {activeTab === "correction" && (
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
-                            <h3 style={styles.sectionTitle}>طلبات تصحيح البصمة</h3>
+                            <h3 style={styles.sectionTitle}>{t('my_corrections')}</h3>
                             <button onClick={() => setShowCorrectionForm(!showCorrectionForm)} style={styles.addButton}>
-                                {showCorrectionForm ? '❌ إلغاء' : '➕ طلب تصحيح'}
+                                {showCorrectionForm ? `❌ ${t('cancel')}` : `➕ ${t('request_correction')}`}
                             </button>
                         </div>
 
                         {showCorrectionForm && (
                             <div style={styles.formCard}>
-                                <h4 style={styles.formTitle}>طلب تصحيح بصمة</h4>
+                                <h4 style={styles.formTitle}>{t('new_correction_request')}</h4>
 
                                 <div style={styles.dateField}>
-                                    <label style={styles.label}>التاريخ المطلوب تصحيحه:</label>
-                                    <input
-                                        type="date"
-                                        value={correctionDate}
-                                        onChange={e => setCorrectionDate(e.target.value)}
-                                        style={styles.input}
-                                        max={new Date().toISOString().split('T')[0]}
-                                    />
+                                    <label style={styles.label}>{t('date_to_correct')}:</label>
+                                    <input type="date" value={correctionDate} onChange={e => setCorrectionDate(e.target.value)} style={styles.input} max={new Date().toISOString().split('T')[0]} />
                                 </div>
 
                                 <div style={styles.timeRow}>
                                     <div style={styles.timeField}>
-                                        <label style={styles.label}>وقت الحضور المفترض (اختياري):</label>
-                                        <input
-                                            type="time"
-                                            value={correctionCheckIn}
-                                            onChange={e => setCorrectionCheckIn(e.target.value)}
-                                            style={styles.input}
-                                        />
+                                        <label style={styles.label}>{t('expected_check_in')}:</label>
+                                        <input type="time" value={correctionCheckIn} onChange={e => setCorrectionCheckIn(e.target.value)} style={styles.input} />
                                     </div>
                                     <div style={styles.timeField}>
-                                        <label style={styles.label}>وقت الانصراف المفترض (اختياري):</label>
-                                        <input
-                                            type="time"
-                                            value={correctionCheckOut}
-                                            onChange={e => setCorrectionCheckOut(e.target.value)}
-                                            style={styles.input}
-                                        />
+                                        <label style={styles.label}>{t('expected_check_out')}:</label>
+                                        <input type="time" value={correctionCheckOut} onChange={e => setCorrectionCheckOut(e.target.value)} style={styles.input} />
                                     </div>
                                 </div>
 
-                                <textarea
-                                    placeholder="سبب طلب التصحيح"
-                                    value={correctionReason}
-                                    onChange={e => setCorrectionReason(e.target.value)}
-                                    style={styles.textarea}
-                                    rows={3}
-                                    required
-                                />
+                                <textarea placeholder={t('reason_required')} value={correctionReason} onChange={e => setCorrectionReason(e.target.value)} style={styles.textarea} rows={3} required />
 
                                 <button onClick={submitCorrectionRequest} style={styles.submitButton}>
-                                    ✅ تقديم الطلب
+                                    ✅ {t('submit_request')}
                                 </button>
                             </div>
                         )}
 
-                        <h4 style={styles.subTitle}>الطلبات السابقة</h4>
+                        <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
                             {correctionRequests.length === 0 && !showCorrectionForm && (
-                                <p style={styles.noData}>لا توجد طلبات سابقة</p>
+                                <p style={styles.noData}>{t('no_requests')}</p>
                             )}
                             {correctionRequests.map(req => {
                                 const status = getApprovalStatus(req)
                                 return (
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>تصحيح يوم {req.date}</span>
+                                            <span style={styles.requestType}>{t('correction_for')} {req.date}</span>
                                             {req.status === "مرفوضة" ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#ffebee',
-                                                    color: '#f44336',
-                                                    border: '1px solid #f44336'
-                                                }}>
-                                                    ❌ مرفوضة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
+                                                    ❌ {t('rejected')}
                                                 </span>
                                             ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#e8f5e9',
-                                                    color: '#2e7d32',
-                                                    border: '1px solid #4caf50'
-                                                }}>
-                                                    ✅ معتمدة
+                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
+                                                    ✅ {t('approved')}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
                                                         <span style={styles.approvalLabel}>HR</span>
-                                                        <span style={{
-                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                        <span style={{ color: req.hr_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.hr_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
-                                                        <span style={styles.approvalLabel}>Manager</span>
-                                                        <span style={{
-                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
+                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
+                                                        <span style={{ color: req.manager_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
                                                             {req.manager_approved ? '✅' : '⏳'}
                                                         </span>
                                                     </div>
@@ -2631,27 +2394,20 @@ export default function AdminPage() {
 
                                         {(req.expected_check_in || req.expected_check_out) && (
                                             <div style={styles.correctionTimes}>
-                                                {req.expected_check_in && (
-                                                    <p>⏰ الحضور المفترض: {req.expected_check_in}</p>
-                                                )}
-                                                {req.expected_check_out && (
-                                                    <p>⌛ الانصراف المفترض: {req.expected_check_out}</p>
-                                                )}
+                                                {req.expected_check_in && <p>⏰ {t('expected_check_in')}: {req.expected_check_in}</p>}
+                                                {req.expected_check_out && <p>⌛ {t('expected_check_out')}: {req.expected_check_out}</p>}
                                             </div>
                                         )}
 
-                                        <p style={styles.requestReason}>السبب: {req.reason}</p>
+                                        <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
-                                                تقديم: {new Date(req.created_at).toLocaleDateString()}
+                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
                                             {req.status === "قيد الانتظار" && (
-                                                <button
-                                                    onClick={() => deleteCorrectionRequest(req.id)}
-                                                    style={styles.deleteButton}
-                                                >
-                                                    🗑️ حذف
+                                                <button onClick={() => deleteCorrectionRequest(req.id)} style={styles.deleteButton}>
+                                                    🗑️ {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -2662,24 +2418,22 @@ export default function AdminPage() {
                     </div>
                 )}
 
-                {/* ========================================= */}
-                {/* تبويب الإعدادات */}
-                {/* ========================================= */}
+                {/* Settings Tab */}
                 {activeTab === "settings" && (
                     <div style={styles.tabContent}>
-                        <h3 style={styles.sectionTitle}>إعدادات الحساب</h3>
+                        <h3 style={styles.sectionTitle}>{t('settings')}</h3>
                         <div style={styles.settingsCard}>
-                            <h4 style={styles.settingsTitle}>تغيير كلمة المرور</h4>
+                            <h4 style={styles.settingsTitle}>{t('change_password')}</h4>
                             <div style={styles.inputGroup}>
-                                <label style={styles.inputLabel}>كلمة المرور الحالية</label>
+                                <label style={styles.inputLabel}>{t('current_password')}</label>
                                 <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="********" style={styles.input} />
                             </div>
                             <div style={styles.inputGroup}>
-                                <label style={styles.inputLabel}>كلمة المرور الجديدة</label>
+                                <label style={styles.inputLabel}>{t('new_password')}</label>
                                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="********" style={styles.input} />
                             </div>
                             <div style={styles.inputGroup}>
-                                <label style={styles.inputLabel}>تأكيد كلمة المرور الجديدة</label>
+                                <label style={styles.inputLabel}>{t('confirm_password')}</label>
                                 <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="********" style={styles.input} />
                             </div>
                             {passwordMessage && (
@@ -2688,22 +2442,22 @@ export default function AdminPage() {
                                 </div>
                             )}
                             <button onClick={handleChangePassword} disabled={changingPassword} style={{ ...styles.saveButton, opacity: changingPassword ? 0.7 : 1, cursor: changingPassword ? 'not-allowed' : 'pointer' }}>
-                                {changingPassword ? 'جاري الحفظ...' : '💾 حفظ كلمة المرور الجديدة'}
+                                {changingPassword ? t('loading') : `💾 ${t('save_new_password')}`}
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* الفوتر */}
+                {/* Footer */}
                 <div style={styles.footer}>
-                    &copy; 2026 Khaled Aboellil. جميع الحقوق محفوظة.
+                    &copy; 2026 Khaled Aboellil. {t('footer')}
                 </div>
             </div>
         </div>
     )
 }
 
-// ==================== الأنماط الموحدة ====================
+// ==================== Styles ====================
 const styles: { [key: string]: React.CSSProperties } = {
     page: {
         fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
@@ -2980,13 +2734,6 @@ const styles: { [key: string]: React.CSSProperties } = {
         fontSize: 12,
         fontWeight: 'bold',
         display: 'inline-block'
-    },
-    statusBadge: {
-        padding: '4px 8px',
-        borderRadius: 4,
-        color: '#ffffff',
-        fontSize: 11,
-        fontWeight: '500'
     },
     typeBadge: {
         padding: '4px 8px',
@@ -3582,5 +3329,30 @@ const styles: { [key: string]: React.CSSProperties } = {
     approvalLabel: {
         color: '#1e293b',
         fontWeight: '500'
-    }
+    },
+    // أنماط النص الأساسية
+    textPrimary: {
+        color: '#000000',
+        fontSize: 14,
+        fontWeight: 'normal',
+    },
+
+    textSecondary: {
+        color: '#333333',
+        fontSize: 13,
+    },
+
+    textBold: {
+        color: '#000000',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+
+    // للعناصر القابلة للنقر
+    clickableText: {
+        color: '#000000',
+        cursor: 'pointer',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
 }
