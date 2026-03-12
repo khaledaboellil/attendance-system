@@ -10,20 +10,27 @@ export async function POST(req: NextRequest) {
     try {
         const { employee_id, current_password, new_password, confirm_password } = await req.json()
 
-        // التحقق من المدخلات
         if (!employee_id || !current_password || !new_password || !confirm_password) {
-            return NextResponse.json({ error: "جميع الحقول مطلوبة" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "جميع الحقول مطلوبة",
+                error_en: "All fields are required"
+            }, { status: 400 })
         }
 
         if (new_password !== confirm_password) {
-            return NextResponse.json({ error: "كلمة المرور الجديدة غير متطابقة" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "كلمة المرور الجديدة غير متطابقة",
+                error_en: "New passwords do not match"
+            }, { status: 400 })
         }
 
         if (new_password.length < 3) {
-            return NextResponse.json({ error: "كلمة المرور يجب أن تكون 3 أحرف على الأقل" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "كلمة المرور يجب أن تكون 3 أحرف على الأقل",
+                error_en: "Password must be at least 3 characters"
+            }, { status: 400 })
         }
 
-        // جلب بيانات الموظف
         const { data: employee, error: fetchError } = await supabase
             .from("employees")
             .select("password")
@@ -31,34 +38,40 @@ export async function POST(req: NextRequest) {
             .single()
 
         if (fetchError || !employee) {
-            return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "الموظف غير موجود",
+                error_en: "Employee not found"
+            }, { status: 404 })
         }
 
-        // التحقق من كلمة المرور الحالية
         if (employee.password !== current_password) {
-            return NextResponse.json({ error: "كلمة المرور الحالية غير صحيحة" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "كلمة المرور الحالية غير صحيحة",
+                error_en: "Current password is incorrect"
+            }, { status: 400 })
         }
 
-        // تحديث كلمة المرور
         const { error: updateError } = await supabase
             .from("employees")
             .update({ password: new_password })
             .eq("id", employee_id)
 
         if (updateError) {
-            console.error("خطأ في تحديث كلمة المرور:", updateError)
-            return NextResponse.json({ error: "حدث خطأ أثناء تحديث كلمة المرور" }, { status: 500 })
+            return NextResponse.json({
+                error_ar: "حدث خطأ أثناء تحديث كلمة المرور",
+                error_en: "Error updating password"
+            }, { status: 500 })
         }
 
-        // لو المستخدم مختار "تذكرني"، نحدث الباسورد في localStorage كمان
-        // (ده هيتعمل في الصفحة نفسها مش هنا)
-
         return NextResponse.json({
-            message: "✅ تم تغيير كلمة المرور بنجاح"
+            message_ar: "تم تغيير كلمة المرور بنجاح",
+            message_en: "Password changed successfully"
         })
 
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ في الخادم",
+            error_en: "Server error"
+        }, { status: 500 })
     }
 }

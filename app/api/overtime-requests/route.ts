@@ -26,9 +26,7 @@ export async function GET(req: NextRequest) {
             `)
             .order("created_at", { ascending: false })
 
-        if (employee_id) {
-            query = query.eq("employee_id", employee_id)
-        }
+        if (employee_id) query = query.eq("employee_id", employee_id)
 
         if (department_ids) {
             const deptIds = department_ids.split(',').map(Number)
@@ -94,10 +92,20 @@ export async function GET(req: NextRequest) {
 
         const { data, error } = await query
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        if (error) {
+            return NextResponse.json({
+                error_ar: "خطأ في جلب الطلبات",
+                error_en: "Error fetching requests"
+            }, { status: 500 })
+        }
+
         return NextResponse.json(data || [])
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء جلب الطلبات" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء جلب الطلبات",
+            error_en: "Error fetching requests"
+        }, { status: 500 })
     }
 }
 
@@ -106,7 +114,10 @@ export async function POST(req: NextRequest) {
         const { employee_id, date, hours, reason } = await req.json()
 
         if (!employee_id || !date || !hours) {
-            return NextResponse.json({ error: "جميع الحقول المطلوبة يجب إدخالها" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "جميع الحقول المطلوبة يجب إدخالها",
+                error_en: "All required fields must be filled"
+            }, { status: 400 })
         }
 
         const { error } = await supabase
@@ -121,10 +132,23 @@ export async function POST(req: NextRequest) {
                 status: "قيد الانتظار"
             }])
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-        return NextResponse.json({ message: "تم تقديم طلب الساعات الإضافية بنجاح" })
+        if (error) {
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
+        }
+
+        return NextResponse.json({
+            message_ar: "تم تقديم طلب الساعات الإضافية بنجاح",
+            message_en: "Overtime request submitted successfully"
+        })
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء إنشاء الطلب" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء إنشاء الطلب",
+            error_en: "Error creating request"
+        }, { status: 500 })
     }
 }
 
@@ -132,10 +156,11 @@ export async function PATCH(req: NextRequest) {
     try {
         const { id, action, approved_by, user_role, is_admin_as_manager } = await req.json()
 
-        console.log("📝 معالجة طلب أوفر تايم:", { id, action, approved_by, user_role, is_admin_as_manager })
-
         if (!id || !action || !approved_by || !user_role) {
-            return NextResponse.json({ error: "البيانات غير كاملة" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "البيانات غير كاملة",
+                error_en: "Incomplete data"
+            }, { status: 400 })
         }
 
         const { data: request, error: fetchError } = await supabase
@@ -145,11 +170,17 @@ export async function PATCH(req: NextRequest) {
             .single()
 
         if (fetchError || !request) {
-            return NextResponse.json({ error: "الطلب غير موجود" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "الطلب غير موجود",
+                error_en: "Request not found"
+            }, { status: 404 })
         }
 
         if (request.status === "مرفوضة" || request.status === "تمت الموافقة") {
-            return NextResponse.json({ error: "لا يمكن تعديل طلب منتهي" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "لا يمكن تعديل طلب منتهي",
+                error_en: "Cannot modify a completed request"
+            }, { status: 400 })
         }
 
         if (action === "reject") {
@@ -161,15 +192,22 @@ export async function PATCH(req: NextRequest) {
                 })
                 .eq("id", id)
 
-            if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-            return NextResponse.json({ message: "تم رفض الطلب" })
+            if (error) {
+                return NextResponse.json({
+                    error_ar: error.message,
+                    error_en: error.message
+                }, { status: 500 })
+            }
+
+            return NextResponse.json({
+                message_ar: "تم رفض الطلب",
+                message_en: "Request rejected"
+            })
         }
 
         let updateData: any = { updated_at: new Date() }
 
-        // الحالة الخاصة: Admin هو مدير على القسم
         if (is_admin_as_manager && user_role === "hr") {
-            console.log("🎯 Admin كمدير - موافقة كاملة فورية")
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
             updateData.manager_approved = true
@@ -193,7 +231,10 @@ export async function PATCH(req: NextRequest) {
             }
         }
         else {
-            return NextResponse.json({ error: "صلاحية غير صحيحة" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "صلاحية غير صحيحة",
+                error_en: "Invalid role"
+            }, { status: 400 })
         }
 
         const { error } = await supabase
@@ -201,24 +242,42 @@ export async function PATCH(req: NextRequest) {
             .update(updateData)
             .eq("id", id)
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-        let message = ""
-        if (is_admin_as_manager) {
-            message = "✅ تمت الموافقة (كـ Admin ومدير) والطلب معتمد الآن"
-        } else if (user_role === "hr") {
-            message = request.manager_approved
-                ? "✅ تمت الموافقة"
-                : "✅ موافقة HR، في انتظار مدير"
-        } else {
-            message = request.hr_approved
-                ? "✅ تمت الموافقة"
-                : "✅ موافقة مدير، في انتظار HR"
+        if (error) {
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
         }
 
-        return NextResponse.json({ message })
+        let message_ar = "", message_en = ""
+        if (is_admin_as_manager) {
+            message_ar = "تمت الموافقة على الطلب بنجاح"
+            message_en = "Request approved successfully"
+        } else if (user_role === "hr") {
+            if (request.manager_approved) {
+                message_ar = "تمت الموافقة على الطلب بنجاح"
+                message_en = "Request approved successfully"
+            } else {
+                message_ar = "تمت موافقة HR، في انتظار موافقة المدير"
+                message_en = "HR approved, waiting for manager"
+            }
+        } else {
+            if (request.hr_approved) {
+                message_ar = "تمت الموافقة على الطلب بنجاح"
+                message_en = "Request approved successfully"
+            } else {
+                message_ar = "تمت موافقة المدير، في انتظار موافقة HR"
+                message_en = "Manager approved, waiting for HR"
+            }
+        }
+
+        return NextResponse.json({ message_ar, message_en })
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء تحديث الطلب" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء تحديث الطلب",
+            error_en: "Error updating request"
+        }, { status: 500 })
     }
 }
 
@@ -229,7 +288,10 @@ export async function DELETE(req: NextRequest) {
         const employee_id = searchParams.get("employee_id")
 
         if (!id || !employee_id) {
-            return NextResponse.json({ error: "معرف الطلب والموظف مطلوب" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "معرف الطلب والموظف مطلوب",
+                error_en: "Request ID and employee ID are required"
+            }, { status: 400 })
         }
 
         const { data: request, error: fetchError } = await supabase
@@ -241,7 +303,10 @@ export async function DELETE(req: NextRequest) {
             .single()
 
         if (fetchError || !request) {
-            return NextResponse.json({ error: "لا يمكن حذف هذا الطلب" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "لا يمكن حذف هذا الطلب",
+                error_en: "Cannot delete this request"
+            }, { status: 404 })
         }
 
         const { error } = await supabase
@@ -249,9 +314,22 @@ export async function DELETE(req: NextRequest) {
             .delete()
             .eq("id", id)
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-        return NextResponse.json({ message: "تم حذف الطلب بنجاح" })
+        if (error) {
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
+        }
+
+        return NextResponse.json({
+            message_ar: "تم حذف الطلب بنجاح",
+            message_en: "Request deleted successfully"
+        })
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء حذف الطلب" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء حذف الطلب",
+            error_en: "Error deleting request"
+        }, { status: 500 })
     }
 }

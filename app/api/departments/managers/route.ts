@@ -22,24 +22,25 @@ export async function GET(req: NextRequest) {
                 departments:department_id (id, name)
             `)
 
-        if (department_id) {
-            query = query.eq("department_id", department_id)
-        }
-        if (manager_id) {
-            query = query.eq("manager_id", manager_id)
-        }
+        if (department_id) query = query.eq("department_id", department_id)
+        if (manager_id) query = query.eq("manager_id", manager_id)
 
         const { data, error } = await query
 
         if (error) {
-            console.error("خطأ في جلب مدراء الأقسام:", error)
-            return NextResponse.json({ error: error.message }, { status: 500 })
+            return NextResponse.json({
+                error_ar: "خطأ في جلب مدراء الأقسام",
+                error_en: "Error fetching department managers"
+            }, { status: 500 })
         }
 
         return NextResponse.json(data || [])
+
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء جلب البيانات" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء جلب البيانات",
+            error_en: "Error fetching data"
+        }, { status: 500 })
     }
 }
 
@@ -48,10 +49,12 @@ export async function POST(req: NextRequest) {
         const { manager_id, department_id } = await req.json()
 
         if (!manager_id || !department_id) {
-            return NextResponse.json({ error: "معرف المدير والقسم مطلوب" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "معرف المدير والقسم مطلوب",
+                error_en: "Manager ID and department ID are required"
+            }, { status: 400 })
         }
 
-        // التحقق من أن الموظف فعلاً مدير أو Admin
         const { data: employee, error: empError } = await supabase
             .from("employees")
             .select("role, name")
@@ -59,17 +62,19 @@ export async function POST(req: NextRequest) {
             .single()
 
         if (empError || !employee) {
-            return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "الموظف غير موجود",
+                error_en: "Employee not found"
+            }, { status: 404 })
         }
 
-        // ✅ التعديل هنا: نسمح لكل من manager و admin
         if (employee.role !== "manager" && employee.role !== "admin") {
             return NextResponse.json({
-                error: `هذا الموظف ليس مديراً (دوره: ${employee.role})`
+                error_ar: `هذا الموظف ليس مديراً (دوره: ${employee.role})`,
+                error_en: `This employee is not a manager (role: ${employee.role})`
             }, { status: 400 })
         }
 
-        // التحقق من عدم وجود العلاقة مسبقاً
         const { data: existing, error: checkError } = await supabase
             .from("manager_departments")
             .select("id")
@@ -77,12 +82,11 @@ export async function POST(req: NextRequest) {
             .eq("department_id", department_id)
             .maybeSingle()
 
-        if (checkError) {
-            return NextResponse.json({ error: checkError.message }, { status: 500 })
-        }
-
         if (existing) {
-            return NextResponse.json({ error: "هذا المدير مضاف للقسم بالفعل" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "هذا المدير مضاف للقسم بالفعل",
+                error_en: "This manager is already assigned to this department"
+            }, { status: 400 })
         }
 
         const { data, error } = await supabase
@@ -98,17 +102,23 @@ export async function POST(req: NextRequest) {
             .single()
 
         if (error) {
-            console.error("خطأ في إضافة مدير للقسم:", error)
-            return NextResponse.json({ error: error.message }, { status: 500 })
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
         }
 
         return NextResponse.json({
-            message: `✅ تم إضافة ${employee.role === 'admin' ? 'الأدمن' : 'المدير'} للقسم بنجاح`,
+            message_ar: `تم إضافة ${employee.role === 'admin' ? 'الأدمن' : 'المدير'} للقسم بنجاح`,
+            message_en: `${employee.role === 'admin' ? 'Admin' : 'Manager'} added to department successfully`,
             data
         })
+
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء إضافة المدير" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء إضافة المدير",
+            error_en: "Error adding manager"
+        }, { status: 500 })
     }
 }
 
@@ -118,7 +128,10 @@ export async function DELETE(req: NextRequest) {
         const id = searchParams.get("id")
 
         if (!id) {
-            return NextResponse.json({ error: "معرف العلاقة مطلوب" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "معرف العلاقة مطلوب",
+                error_en: "Relation ID is required"
+            }, { status: 400 })
         }
 
         const { error } = await supabase
@@ -127,13 +140,21 @@ export async function DELETE(req: NextRequest) {
             .eq("id", id)
 
         if (error) {
-            console.error("خطأ في إزالة المدير:", error)
-            return NextResponse.json({ error: error.message }, { status: 500 })
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
         }
 
-        return NextResponse.json({ message: "تم إزالة المدير من القسم بنجاح" })
+        return NextResponse.json({
+            message_ar: "تم إزالة المدير من القسم بنجاح",
+            message_en: "Manager removed from department successfully"
+        })
+
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء إزالة المدير" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء إزالة المدير",
+            error_en: "Error removing manager"
+        }, { status: 500 })
     }
 }

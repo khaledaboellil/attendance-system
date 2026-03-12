@@ -6,7 +6,18 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// GET: جلب طلبات التصحيح
+function createDateTimeFromLocal(date: string, time: string | null): Date | null {
+    if (!time) return null;
+    try {
+        const [year, month, day] = date.split('-').map(Number);
+        const [hours, minutes] = time.split(':').map(Number);
+        const localDate = new Date(year, month - 1, day, hours, minutes, 0);
+        return localDate;
+    } catch (error) {
+        return null;
+    }
+}
+
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url)
@@ -27,9 +38,7 @@ export async function GET(req: NextRequest) {
             `)
             .order("created_at", { ascending: false })
 
-        if (employee_id) {
-            query = query.eq("employee_id", employee_id)
-        }
+        if (employee_id) query = query.eq("employee_id", employee_id)
 
         if (department_ids) {
             const deptIds = department_ids.split(',').map(Number)
@@ -95,20 +104,32 @@ export async function GET(req: NextRequest) {
 
         const { data, error } = await query
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        if (error) {
+            return NextResponse.json({
+                error_ar: "خطأ في جلب الطلبات",
+                error_en: "Error fetching requests"
+            }, { status: 500 })
+        }
+
         return NextResponse.json(data || [])
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء جلب الطلبات" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء جلب الطلبات",
+            error_en: "Error fetching requests"
+        }, { status: 500 })
     }
 }
 
-// POST: إنشاء طلب تصحيح جديد
 export async function POST(req: NextRequest) {
     try {
         const { employee_id, date, expected_check_in, expected_check_out, reason } = await req.json()
 
         if (!employee_id || !date || !reason) {
-            return NextResponse.json({ error: "جميع الحقول المطلوبة يجب إدخالها" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "جميع الحقول المطلوبة يجب إدخالها",
+                error_en: "All required fields must be filled"
+            }, { status: 400 })
         }
 
         const { data: existing } = await supabase
@@ -120,7 +141,10 @@ export async function POST(req: NextRequest) {
             .maybeSingle()
 
         if (existing) {
-            return NextResponse.json({ error: "لديك طلب قيد الانتظار لنفس اليوم" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "لديك طلب قيد الانتظار لنفس اليوم",
+                error_en: "You already have a pending request for this date"
+            }, { status: 400 })
         }
 
         const { error } = await supabase
@@ -136,50 +160,35 @@ export async function POST(req: NextRequest) {
                 status: "قيد الانتظار"
             }])
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-        return NextResponse.json({ message: "تم تقديم طلب التصحيح بنجاح" })
+        if (error) {
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
+        }
+
+        return NextResponse.json({
+            message_ar: "تم تقديم طلب التصحيح بنجاح",
+            message_en: "Correction request submitted successfully"
+        })
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء إنشاء الطلب" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء إنشاء الطلب",
+            error_en: "Error creating request"
+        }, { status: 500 })
     }
 }
 
-/**
- * الدالة الأساسية: إنشاء كائن Date صحيح من التاريخ والوقت
- * هذه الدالة تحاكي طريقة عمل new Date() في تسجيل الحضور
- */
-function createDateTimeFromLocal(date: string, time: string | null): Date | null {
-    if (!time) return null;
-
-    try {
-        // تقسيم التاريخ (YYYY-MM-DD)
-        const [year, month, day] = date.split('-').map(Number);
-
-        // تقسيم الوقت (HH:mm)
-        const [hours, minutes] = time.split(':').map(Number);
-
-        // إنشاء كائن Date باستخدام التوقيت المحلي للمتصفح/السيرفر
-        // هذا بالضبط ما يفعله new Date() عندما نستخدمه في تسجيل الحضور
-        const localDate = new Date(year, month - 1, day, hours, minutes, 0);
-
-        console.log(`🕒 إنشاء تاريخ محلي: ${date} ${time} -> ${localDate.toString()}`);
-        console.log(`🕒 بصيغة ISO: ${localDate.toISOString()}`);
-
-        return localDate;
-    } catch (error) {
-        console.error("خطأ في إنشاء التاريخ:", error);
-        return null;
-    }
-}
-
-// PATCH: الموافقة على طلب تصحيح بصمة (مع تحديث الحضور)
 export async function PATCH(req: NextRequest) {
     try {
         const { id, action, approved_by, user_role, is_admin_as_manager } = await req.json()
 
-        console.log("📝 معالجة طلب تصحيح:", { id, action, approved_by, user_role, is_admin_as_manager })
-
         if (!id || !action || !approved_by || !user_role) {
-            return NextResponse.json({ error: "البيانات غير كاملة" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "البيانات غير كاملة",
+                error_en: "Incomplete data"
+            }, { status: 400 })
         }
 
         const { data: request, error: fetchError } = await supabase
@@ -188,18 +197,21 @@ export async function PATCH(req: NextRequest) {
             .eq("id", id)
             .single()
 
-        console.log("📋 بيانات الطلب:", request)
-
         if (fetchError || !request) {
-            return NextResponse.json({ error: "الطلب غير موجود" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "الطلب غير موجود",
+                error_en: "Request not found"
+            }, { status: 404 })
         }
 
         if (request.status === "مرفوضة" || request.status === "تمت الموافقة") {
-            return NextResponse.json({ error: "لا يمكن تعديل طلب منتهي" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "لا يمكن تعديل طلب منتهي",
+                error_en: "Cannot modify a completed request"
+            }, { status: 400 })
         }
 
         if (action === "reject") {
-            console.log("❌ رفض الطلب")
             const { error } = await supabase
                 .from("attendance_correction_requests")
                 .update({
@@ -208,98 +220,74 @@ export async function PATCH(req: NextRequest) {
                 })
                 .eq("id", id)
 
-            if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-            return NextResponse.json({ message: "تم رفض الطلب" })
+            if (error) {
+                return NextResponse.json({
+                    error_ar: error.message,
+                    error_en: error.message
+                }, { status: 500 })
+            }
+
+            return NextResponse.json({
+                message_ar: "تم رفض الطلب",
+                message_en: "Request rejected"
+            })
         }
 
         let updateData: any = { updated_at: new Date() }
 
-        // الحالة الخاصة: Admin هو مدير على القسم
         if (is_admin_as_manager && user_role === "hr") {
-            console.log("🎯 Admin كمدير - موافقة كاملة فورية")
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
             updateData.status = "تمت الموافقة"
 
-            // تحديث جدول الحضور - بنفس طريقة تسجيل الحضور
-            console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
             const employeeId = request.employee_id
             const targetDate = request.date
 
-            console.log("👤 الموظف:", employeeId)
-            console.log("📅 التاريخ:", targetDate)
-            console.log("⏰ وقت الحضور المفترض:", request.expected_check_in)
-            console.log("⏰ وقت الانصراف المفترض:", request.expected_check_out)
-
-            // البحث عن سجل الحضور الموجود
-            const { data: existingAttendance, error: searchError } = await supabase
+            const { data: existingAttendance } = await supabase
                 .from("attendance")
                 .select("*")
                 .eq("employee_id", employeeId)
                 .eq("day", targetDate)
                 .maybeSingle()
 
-            console.log("🔍 سجل الحضور الموجود:", existingAttendance)
-
             const attendanceData: any = {
                 employee_id: employeeId,
                 day: targetDate
             }
 
-            // ✅ استخدام نفس طريقة تسجيل الحضور بالضبط
             if (request.expected_check_in) {
-                // إنشاء كائن Date بنفس طريقة new Date() في تسجيل الحضور
                 const checkInDate = createDateTimeFromLocal(targetDate, request.expected_check_in);
                 if (checkInDate) {
                     attendanceData.check_in = checkInDate.toISOString();
-                    console.log("🕒 وقت الحضور بعد التحويل (ISO):", attendanceData.check_in);
                 }
             }
 
             if (request.expected_check_out) {
-                // إنشاء كائن Date بنفس طريقة new Date() في تسجيل الحضور
                 const checkOutDate = createDateTimeFromLocal(targetDate, request.expected_check_out);
                 if (checkOutDate) {
                     attendanceData.check_out = checkOutDate.toISOString();
-                    console.log("🕒 وقت الانصراف بعد التحويل (ISO):", attendanceData.check_out);
                 }
             }
 
-            console.log("📦 بيانات الحضور الكاملة:", attendanceData);
-
-            let attendanceResult
-
             if (existingAttendance) {
-                console.log("📝 تحديث سجل موجود ID:", existingAttendance.id)
-                attendanceResult = await supabase
+                await supabase
                     .from("attendance")
                     .update(attendanceData)
                     .eq("id", existingAttendance.id)
             } else {
-                console.log("➕ إضافة سجل جديد")
-                attendanceResult = await supabase
+                await supabase
                     .from("attendance")
                     .insert([attendanceData])
-            }
-
-            console.log("📊 نتيجة تحديث/إضافة الحضور:", attendanceResult)
-
-            if (attendanceResult.error) {
-                console.error("❌ خطأ في تحديث/إضافة الحضور:", attendanceResult.error)
-            } else {
-                console.log("✅ تم تحديث الحضور بنجاح")
             }
         }
         else if (user_role === "hr") {
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
-            console.log("✅ موافقة HR")
 
             if (request.manager_approved) {
                 updateData.status = "تمت الموافقة"
-                console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
 
                 const employeeId = request.employee_id
                 const targetDate = request.date
@@ -344,11 +332,9 @@ export async function PATCH(req: NextRequest) {
         else if (user_role === "manager") {
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
-            console.log("✅ موافقة مدير")
 
             if (request.hr_approved) {
                 updateData.status = "تمت الموافقة"
-                console.log("🎯 اكتملت الموافقات - جاري تحديث الحضور")
 
                 const employeeId = request.employee_id
                 const targetDate = request.date
@@ -391,7 +377,10 @@ export async function PATCH(req: NextRequest) {
             }
         }
         else {
-            return NextResponse.json({ error: "صلاحية غير صحيحة" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "صلاحية غير صحيحة",
+                error_en: "Invalid role"
+            }, { status: 400 })
         }
 
         const { error } = await supabase
@@ -400,33 +389,44 @@ export async function PATCH(req: NextRequest) {
             .eq("id", id)
 
         if (error) {
-            console.error("❌ خطأ في تحديث الطلب:", error)
-            return NextResponse.json({ error: error.message }, { status: 500 })
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
         }
 
-        let message = ""
+        let message_ar = "", message_en = ""
         if (is_admin_as_manager) {
-            message = "✅ تمت الموافقة على طلب التصحيح (كـ Admin ومدير) وتحديث الحضور"
+            message_ar = "تمت الموافقة على طلب التصحيح وتحديث الحضور"
+            message_en = "Correction request approved and attendance updated"
         } else if (user_role === "hr") {
-            message = request.manager_approved
-                ? "✅ تمت الموافقة على طلب التصحيح وتحديث الحضور"
-                : "✅ تمت موافقة HR، في انتظار موافقة مدير"
+            if (request.manager_approved) {
+                message_ar = "تمت الموافقة على طلب التصحيح وتحديث الحضور"
+                message_en = "Correction request approved and attendance updated"
+            } else {
+                message_ar = "تمت موافقة HR، في انتظار موافقة مدير"
+                message_en = "HR approved, waiting for manager"
+            }
         } else {
-            message = request.hr_approved
-                ? "✅ تمت الموافقة على طلب التصحيح وتحديث الحضور"
-                : "✅ تمت موافقة مدير، في انتظار موافقة HR"
+            if (request.hr_approved) {
+                message_ar = "تمت الموافقة على طلب التصحيح وتحديث الحضور"
+                message_en = "Correction request approved and attendance updated"
+            } else {
+                message_ar = "تمت موافقة مدير، في انتظار موافقة HR"
+                message_en = "Manager approved, waiting for HR"
+            }
         }
 
-        console.log("✨ الرسالة النهائية:", message)
-        return NextResponse.json({ message })
+        return NextResponse.json({ message_ar, message_en })
 
     } catch (error) {
-        console.error("❌ خطأ في PATCH:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء تحديث الطلب" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء تحديث الطلب",
+            error_en: "Error updating request"
+        }, { status: 500 })
     }
 }
 
-// DELETE: حذف طلب
 export async function DELETE(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url)
@@ -434,7 +434,10 @@ export async function DELETE(req: NextRequest) {
         const employee_id = searchParams.get("employee_id")
 
         if (!id || !employee_id) {
-            return NextResponse.json({ error: "معرف الطلب والموظف مطلوب" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "معرف الطلب والموظف مطلوب",
+                error_en: "Request ID and employee ID are required"
+            }, { status: 400 })
         }
 
         const { data: request, error: fetchError } = await supabase
@@ -446,7 +449,10 @@ export async function DELETE(req: NextRequest) {
             .single()
 
         if (fetchError || !request) {
-            return NextResponse.json({ error: "لا يمكن حذف هذا الطلب" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "لا يمكن حذف هذا الطلب",
+                error_en: "Cannot delete this request"
+            }, { status: 404 })
         }
 
         const { error } = await supabase
@@ -454,9 +460,22 @@ export async function DELETE(req: NextRequest) {
             .delete()
             .eq("id", id)
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-        return NextResponse.json({ message: "تم حذف الطلب بنجاح" })
+        if (error) {
+            return NextResponse.json({
+                error_ar: error.message,
+                error_en: error.message
+            }, { status: 500 })
+        }
+
+        return NextResponse.json({
+            message_ar: "تم حذف الطلب بنجاح",
+            message_en: "Request deleted successfully"
+        })
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء حذف الطلب" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء حذف الطلب",
+            error_en: "Error deleting request"
+        }, { status: 500 })
     }
 }

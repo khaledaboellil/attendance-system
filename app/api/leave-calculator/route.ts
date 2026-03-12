@@ -6,7 +6,39 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// دالة حساب الرصيد بناءً على تاريخ التعيين
+function calculateYearsOfService(hireDate: Date, targetDate: Date): number {
+    const diffTime = Math.abs(targetDate.getTime() - hireDate.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays / 365
+}
+
+function calculateProportionalLeave(hireDate: Date, targetDate: Date, fullYearDays: number): number {
+    const endOfYear = new Date(targetDate.getFullYear(), 11, 31)
+    const daysWorked = Math.ceil((endOfYear.getTime() - hireDate.getTime()) / (1000 * 60 * 60 * 24))
+    const totalYearDays = 365
+    const proportionalDays = (daysWorked / totalYearDays) * fullYearDays
+    return Math.round(proportionalDays * 2) / 2
+}
+
+function getServiceMessage(years: number): { ar: string, en: string } {
+    if (years < 1) {
+        return {
+            ar: "أقل من سنة - يتم احتساب الرصيد نسبياً حسب تاريخ التعيين",
+            en: "Less than 1 year - Leave balance is calculated proportionally based on hire date"
+        }
+    } else if (years >= 1 && years < 10) {
+        return {
+            ar: "من سنة إلى 10 سنوات - رصيدك 14 يوم إجازة سنوية",
+            en: "1 to 10 years - You have 14 days annual leave"
+        }
+    } else {
+        return {
+            ar: "أكثر من 10 سنوات - رصيدك 23 يوم إجازة سنوية",
+            en: "More than 10 years - You have 23 days annual leave"
+        }
+    }
+}
+
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url)
@@ -14,10 +46,12 @@ export async function GET(req: NextRequest) {
         const target_date = searchParams.get("target_date") || new Date().toISOString().split('T')[0]
 
         if (!employee_id) {
-            return NextResponse.json({ error: "معرف الموظف مطلوب" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "معرف الموظف مطلوب",
+                error_en: "Employee ID is required"
+            }, { status: 400 })
         }
 
-        // جلب بيانات الموظف
         const { data: employee, error: empError } = await supabase
             .from("employees")
             .select("hire_date, used_leave_days")
@@ -25,29 +59,30 @@ export async function GET(req: NextRequest) {
             .single()
 
         if (empError || !employee) {
-            return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "الموظف غير موجود",
+                error_en: "Employee not found"
+            }, { status: 404 })
         }
 
         if (!employee.hire_date) {
             return NextResponse.json({
-                error: "تاريخ التعيين غير مسجل لهذا الموظف",
-                annual: 21, // قيمة افتراضية
+                error_ar: "تاريخ التعيين غير مسجل لهذا الموظف",
+                error_en: "Hire date not recorded for this employee",
+                annual: 21,
                 emergency: 7
             }, { status: 400 })
         }
 
-        // حساب مدة الخدمة بالسنوات
         const hireDate = new Date(employee.hire_date)
         const targetDate = new Date(target_date)
 
         const yearsOfService = calculateYearsOfService(hireDate, targetDate)
 
-        // حساب رصيد الإجازات حسب مدة الخدمة
         let annualLeave = 0
-        let emergencyLeave = 7 // الإجازة العارضة ثابتة 7 أيام للكل
+        const emergencyLeave = 7
 
         if (yearsOfService < 1) {
-            // أقل من سنة: يحسب بالأشهر
             annualLeave = calculateProportionalLeave(hireDate, targetDate, 8)
         } else if (yearsOfService >= 1 && yearsOfService < 10) {
             annualLeave = 14
@@ -55,9 +90,9 @@ export async function GET(req: NextRequest) {
             annualLeave = 23
         }
 
-        // حساب الرصيد المتبقي
         const usedDays = employee.used_leave_days || 0
         const remainingAnnual = Math.max(0, annualLeave - usedDays)
+        const message = getServiceMessage(yearsOfService)
 
         return NextResponse.json({
             employee_id,
@@ -67,44 +102,15 @@ export async function GET(req: NextRequest) {
             emergency_leave_total: emergencyLeave,
             used_days: usedDays,
             remaining_annual: remainingAnnual,
-            remaining_emergency: emergencyLeave, // الإجازة العارضة لسه مش متتبعة
-            message: getServiceMessage(yearsOfService)
+            remaining_emergency: emergencyLeave,
+            message_ar: message.ar,
+            message_en: message.en
         })
 
     } catch (error) {
-        console.error("خطأ في حساب الرصيد:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء حساب الرصيد" }, { status: 500 })
-    }
-}
-
-// حساب عدد سنوات الخدمة
-function calculateYearsOfService(hireDate: Date, targetDate: Date): number {
-    const diffTime = Math.abs(targetDate.getTime() - hireDate.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays / 365
-}
-
-// حساب الرصيد النسبي (لمن لم يكمل سنة)
-function calculateProportionalLeave(hireDate: Date, targetDate: Date, fullYearDays: number): number {
-    // حساب عدد الأيام من تاريخ التعيين حتى نهاية السنة أو التاريخ المستهدف
-    const endOfYear = new Date(targetDate.getFullYear(), 11, 31)
-    const daysWorked = Math.ceil((endOfYear.getTime() - hireDate.getTime()) / (1000 * 60 * 60 * 24))
-    const totalYearDays = 365
-
-    // الرصيد = (أيام العمل / 365) * الرصيد الكامل
-    const proportionalDays = (daysWorked / totalYearDays) * fullYearDays
-
-    // تقريب لأقرب 0.5 يوم
-    return Math.round(proportionalDays * 2) / 2
-}
-
-// رسالة توضيحية حسب مدة الخدمة
-function getServiceMessage(years: number): string {
-    if (years < 1) {
-        return "أقل من سنة - يتم احتساب الرصيد نسبياً حسب تاريخ التعيين"
-    } else if (years >= 1 && years < 10) {
-        return "من سنة إلى 10 سنوات - رصيدك 14 يوم إجازة سنوية"
-    } else {
-        return "أكثر من 10 سنوات - رصيدك 23 يوم إجازة سنوية"
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء حساب الرصيد",
+            error_en: "Error calculating balance"
+        }, { status: 500 })
     }
 }

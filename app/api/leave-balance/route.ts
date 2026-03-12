@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
         const employee_id = searchParams.get("employee_id")
 
         if (!employee_id) {
-            return NextResponse.json({ error: "معرف الموظف مطلوب" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "معرف الموظف مطلوب",
+                error_en: "Employee ID is required"
+            }, { status: 400 })
         }
 
         // جلب بيانات الموظف
@@ -23,7 +26,10 @@ export async function GET(req: NextRequest) {
             .single()
 
         if (empError || !employee) {
-            return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
+            return NextResponse.json({
+                error_ar: "الموظف غير موجود",
+                error_en: "Employee not found"
+            }, { status: 404 })
         }
 
         const total = employee.total_leave_days || 21
@@ -34,9 +40,15 @@ export async function GET(req: NextRequest) {
             employee_name: employee.name,
             total,
             used,
-            remaining
+            remaining,
+            message_ar: remaining > 0 ? `رصيدك المتبقي ${remaining} يوم` : `لقد استنفذت رصيد إجازاتك`,
+            message_en: remaining > 0 ? `Your remaining balance is ${remaining} days` : `You have used all your leave balance`
         })
+
     } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء جلب الرصيد" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء جلب الرصيد",
+            error_en: "Error fetching balance"
+        }, { status: 500 })
     }
 }

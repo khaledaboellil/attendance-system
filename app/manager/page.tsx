@@ -1,5 +1,5 @@
 ﻿"use client"
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useLanguage } from '@/context/LanguageContext'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
@@ -100,6 +100,17 @@ export default function ManagerPage() {
     const router = useRouter()
     const { t, language, dir } = useLanguage()
 
+    // دالة مساعدة لعرض الرسائل
+    const showMessage = (data: any, isSuccess: boolean = true) => {
+        const key = isSuccess ? 'message' : 'error'
+
+        if (data[`${key}_ar`] && data[`${key}_en`]) {
+            alert(language === 'ar' ? data[`${key}_ar`] : data[`${key}_en`])
+        } else if (data[key]) {
+            alert(data[key])
+        }
+    }
+
     // ==================== Manager Data ====================
     const [managerName, setManagerName] = useState("")
     const [managerUsername, setManagerUsername] = useState("")
@@ -136,7 +147,8 @@ export default function ManagerPage() {
         emergency_remaining: 7,
         yearsOfService: 0,
         hire_date: "",
-        message: ""
+        message_ar: "",
+        message_en: ""
     })
 
     const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([])
@@ -196,7 +208,6 @@ export default function ManagerPage() {
         setManagerId(storedId)
         setJobTitle(storedJobTitle || t('manager'))
 
-        // Load data
         fetchManagedDepartments(storedId)
         fetchLeaveRequests(storedId)
         fetchLeaveBalance(storedId)
@@ -205,7 +216,6 @@ export default function ManagerPage() {
         fetchCorrectionRequests(storedId)
         fetchTodayAttendance(storedUsername || "")
 
-        // Get geolocation
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 pos => {
@@ -249,7 +259,6 @@ export default function ManagerPage() {
                     const deptNames = myDepts.map((d: any) => d.name).join("، ")
                     setManagedDeptsNames(deptNames)
 
-                    // Fetch all requests
                     await fetchAllRequests(deptIds, "pending")
                 }
             }
@@ -261,23 +270,18 @@ export default function ManagerPage() {
 
     const fetchAllRequests = async (deptIds: number[], statusFilter: string = "pending") => {
         try {
-            // Fetch leave requests
             const leavesRes = await fetch(`/api/leave-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const leaves = leavesRes.ok ? await leavesRes.json() : []
 
-            // Fetch overtime requests
             const overtimeRes = await fetch(`/api/overtime-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const overtime = overtimeRes.ok ? await overtimeRes.json() : []
 
-            // Fetch permission requests
             const permissionRes = await fetch(`/api/permission-requests?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const permission = permissionRes.ok ? await permissionRes.json() : []
 
-            // Fetch correction requests
             const correctionRes = await fetch(`/api/attendance-correction?user_role=manager&department_ids=${deptIds.join(',')}${statusFilter !== "all" ? `&status=${statusFilter}` : ""}`)
             const correction = correctionRes.ok ? await correctionRes.json() : []
 
-            // Combine all requests
             const combined = [
                 ...leaves.map((r: any) => ({ ...r, requestType: "leave", requestTypeText: t('leave') })),
                 ...overtime.map((r: any) => ({ ...r, requestType: "overtime", requestTypeText: t('overtime') })),
@@ -303,7 +307,6 @@ export default function ManagerPage() {
         }
     }
 
-    // Fetch manager's personal requests
     const fetchLeaveRequests = async (empId: string) => {
         try {
             const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
@@ -358,7 +361,8 @@ export default function ManagerPage() {
                     emergency_remaining: data.remaining_emergency || 7,
                     yearsOfService: data.years_of_service || 0,
                     hire_date: data.hire_date || "",
-                    message: data.message || ""
+                    message_ar: data.message_ar || "",
+                    message_en: data.message_en || ""
                 })
                 setHireDate(data.hire_date || "")
             }
@@ -410,7 +414,7 @@ export default function ManagerPage() {
                 })
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) {
                 fetchAllRequests(managedDepts, filter)
             }
@@ -437,7 +441,7 @@ export default function ManagerPage() {
                 })
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) {
                 fetchAllRequests(managedDepts, filter)
             }
@@ -477,7 +481,7 @@ export default function ManagerPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowLeaveForm(false)
             setLeaveStart("")
@@ -496,7 +500,7 @@ export default function ManagerPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) {
                 fetchLeaveRequests(managerId)
                 fetchLeaveBalance(managerId)
@@ -522,7 +526,7 @@ export default function ManagerPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowOvertimeForm(false)
             setOvertimeDate("")
@@ -540,7 +544,7 @@ export default function ManagerPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchOvertimeRequests(managerId)
         } catch (err) { console.error(err) }
     }
@@ -570,7 +574,7 @@ export default function ManagerPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowPermissionForm(false)
             setPermissionType("ساعة")
@@ -590,7 +594,7 @@ export default function ManagerPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchPermissionRequests(managerId)
         } catch (err) { console.error(err) }
     }
@@ -614,7 +618,7 @@ export default function ManagerPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowCorrectionForm(false)
             setCorrectionDate("")
@@ -633,7 +637,7 @@ export default function ManagerPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchCorrectionRequests(managerId)
         } catch (err) { console.error(err) }
     }
@@ -663,8 +667,10 @@ export default function ManagerPage() {
                 })
             })
             const data = await res.json()
-            alert(data.message || data.error)
-            fetchTodayAttendance(managerUsername)
+            showMessage(data, res.ok)
+            if (res.ok) {
+                fetchTodayAttendance(managerUsername)
+            }
         } catch (err) {
             console.error(err)
             alert(t('error_occurred'))
@@ -727,7 +733,7 @@ export default function ManagerPage() {
             const data = await res.json()
 
             if (res.ok) {
-                setPasswordMessage({ type: 'success', text: data.message })
+                setPasswordMessage({ type: 'success', text: language === 'ar' ? data.message_ar : data.message_en })
                 setCurrentPassword("")
                 setNewPassword("")
                 setConfirmPassword("")
@@ -736,7 +742,7 @@ export default function ManagerPage() {
                     localStorage.setItem("remembered_password", newPassword)
                 }
             } else {
-                setPasswordMessage({ type: 'error', text: data.error })
+                setPasswordMessage({ type: 'error', text: language === 'ar' ? data.error_ar : data.error_en })
             }
         } catch (err) {
             setPasswordMessage({ type: 'error', text: t('connection_error') })
@@ -1231,8 +1237,10 @@ export default function ManagerPage() {
                         {/* Leave Balance Card */}
                         <div style={styles.balanceCard}>
                             <h4 style={styles.balanceTitle}>{t('leave_balance')}</h4>
-                            {leaveBalance.message && (
-                                <p style={styles.balanceMessage}>{leaveBalance.message}</p>
+                            {leaveBalance.message_ar && (
+                                <p style={styles.balanceMessage}>
+                                    {language === 'ar' ? leaveBalance.message_ar : leaveBalance.message_en}
+                                </p>
                             )}
 
                             <div style={styles.balanceRow}>

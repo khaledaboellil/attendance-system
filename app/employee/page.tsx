@@ -100,7 +100,8 @@ export default function EmployeePage() {
         emergency_remaining: 7,
         yearsOfService: 0,
         hire_date: "",
-        message: ""
+        message_ar: "",
+        message_en: ""
     })
 
     // ==================== Overtime Requests ====================
@@ -137,6 +138,17 @@ export default function EmployeePage() {
     // ==================== Active Tab ====================
     const [activeTab, setActiveTab] = useState<"attendance" | "leave" | "overtime" | "permission" | "correction" | "settings">("attendance")
 
+    // دالة مساعدة لعرض الرسائل
+    const showMessage = (data: any, isSuccess: boolean = true) => {
+        const key = isSuccess ? 'message' : 'error'
+
+        if (data[`${key}_ar`] && data[`${key}_en`]) {
+            alert(language === 'ar' ? data[`${key}_ar`] : data[`${key}_en`])
+        } else if (data[key]) {
+            alert(data[key])
+        }
+    }
+
     // =============================================
     // useEffect for loading data
     // =============================================
@@ -164,7 +176,6 @@ export default function EmployeePage() {
         fetchPermissionRequests(storedId || "")
         fetchCorrectionRequests(storedId || "")
 
-        // Get geolocation
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 pos => {
@@ -229,8 +240,12 @@ export default function EmployeePage() {
                 })
             })
             const data = await res.json()
-            alert(data.message || data.error)
-            fetchTodayAttendance(employeeUsername)
+
+            showMessage(data, res.ok)
+
+            if (res.ok) {
+                fetchTodayAttendance(employeeUsername)
+            }
         } catch (err) {
             console.error(err)
             alert(t('error_occurred'))
@@ -257,7 +272,8 @@ export default function EmployeePage() {
                     emergency_remaining: data.remaining_emergency || 7,
                     yearsOfService: data.years_of_service || 0,
                     hire_date: data.hire_date || "",
-                    message: data.message || ""
+                    message_ar: data.message_ar || "",
+                    message_en: data.message_en || ""
                 })
                 setHireDate(data.hire_date || "")
             }
@@ -308,7 +324,8 @@ export default function EmployeePage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
+
         if (res.ok) {
             setShowLeaveForm(false)
             setLeaveStart("")
@@ -327,7 +344,7 @@ export default function EmployeePage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) {
                 fetchLeaveRequests(employeeId)
                 fetchLeaveBalance(employeeId)
@@ -364,7 +381,8 @@ export default function EmployeePage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
+
         if (res.ok) {
             setShowOvertimeForm(false)
             setOvertimeDate("")
@@ -382,7 +400,7 @@ export default function EmployeePage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchOvertimeRequests(employeeId)
         } catch (err) { console.error(err) }
     }
@@ -423,7 +441,8 @@ export default function EmployeePage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
+
         if (res.ok) {
             setShowPermissionForm(false)
             setPermissionType("ساعة")
@@ -443,7 +462,7 @@ export default function EmployeePage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchPermissionRequests(employeeId)
         } catch (err) { console.error(err) }
     }
@@ -478,7 +497,8 @@ export default function EmployeePage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
+
         if (res.ok) {
             setShowCorrectionForm(false)
             setCorrectionDate("")
@@ -497,7 +517,7 @@ export default function EmployeePage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchCorrectionRequests(employeeId)
         } catch (err) { console.error(err) }
     }
@@ -540,7 +560,7 @@ export default function EmployeePage() {
             const data = await res.json()
 
             if (res.ok) {
-                setPasswordMessage({ type: 'success', text: data.message })
+                setPasswordMessage({ type: 'success', text: language === 'ar' ? data.message_ar : data.message_en })
                 setCurrentPassword("")
                 setNewPassword("")
                 setConfirmPassword("")
@@ -549,7 +569,7 @@ export default function EmployeePage() {
                     localStorage.setItem("remembered_password", newPassword)
                 }
             } else {
-                setPasswordMessage({ type: 'error', text: data.error })
+                setPasswordMessage({ type: 'error', text: language === 'ar' ? data.error_ar : data.error_en })
             }
         } catch (err) {
             setPasswordMessage({ type: 'error', text: t('connection_error') })
@@ -827,8 +847,10 @@ export default function EmployeePage() {
                         {/* Leave Balance Card */}
                         <div style={styles.balanceCard}>
                             <h4 style={styles.balanceTitle}>{t('leave_balance')}</h4>
-                            {leaveBalance.message && (
-                                <p style={styles.balanceMessage}>{leaveBalance.message}</p>
+                            {leaveBalance.message_ar && (
+                                <p style={styles.balanceMessage}>
+                                    {language === 'ar' ? leaveBalance.message_ar : leaveBalance.message_en}
+                                </p>
                             )}
 
                             <div style={styles.balanceRow}>

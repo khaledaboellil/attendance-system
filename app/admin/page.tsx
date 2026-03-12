@@ -66,6 +66,17 @@ export default function AdminPage() {
     const router = useRouter()
     const { t, language, dir } = useLanguage()
 
+    // دالة مساعدة لعرض الرسائل
+    const showMessage = (data: any, isSuccess: boolean = true) => {
+        const key = isSuccess ? 'message' : 'error'
+
+        if (data[`${key}_ar`] && data[`${key}_en`]) {
+            alert(language === 'ar' ? data[`${key}_ar`] : data[`${key}_en`])
+        } else if (data[key]) {
+            alert(data[key])
+        }
+    }
+
     // ==================== Admin Data ====================
     const [adminName, setAdminName] = useState("")
     const [adminUsername, setAdminUsername] = useState("")
@@ -167,7 +178,8 @@ export default function AdminPage() {
         emergency_remaining: 7,
         yearsOfService: 0,
         hire_date: "",
-        message: ""
+        message_ar: "",
+        message_en: ""
     })
 
     // ==================== Overtime Requests ====================
@@ -480,7 +492,8 @@ export default function AdminPage() {
                     emergency_remaining: data.remaining_emergency || 7,
                     yearsOfService: data.years_of_service || 0,
                     hire_date: data.hire_date || "",
-                    message: data.message || ""
+                    message_ar: data.message_ar || "",
+                    message_en: data.message_en || ""
                 })
             }
         } catch (err) { console.error(err) }
@@ -546,7 +559,7 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowLeaveForm(false)
             setLeaveStart("")
@@ -572,7 +585,7 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowOvertimeForm(false)
             setOvertimeDate("")
@@ -603,7 +616,7 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowPermissionForm(false)
             setPermissionType("ساعة")
@@ -631,7 +644,7 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        alert(data.message || data.error)
+        showMessage(data, res.ok)
         if (res.ok) {
             setShowCorrectionForm(false)
             setCorrectionDate("")
@@ -653,7 +666,7 @@ export default function AdminPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) {
                 fetchLeaveRequests(adminId)
                 fetchLeaveBalance(adminId)
@@ -669,7 +682,7 @@ export default function AdminPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchOvertimeRequests(adminId)
         } catch (err) { console.error(err) }
     }
@@ -682,7 +695,7 @@ export default function AdminPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchPermissionRequests(adminId)
         } catch (err) { console.error(err) }
     }
@@ -695,7 +708,7 @@ export default function AdminPage() {
                 method: "DELETE"
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchCorrectionRequests(adminId)
         } catch (err) { console.error(err) }
     }
@@ -738,7 +751,7 @@ export default function AdminPage() {
             const data = await res.json()
 
             if (res.ok) {
-                setPasswordMessage({ type: 'success', text: data.message })
+                setPasswordMessage({ type: 'success', text: language === 'ar' ? data.message_ar : data.message_en })
                 setCurrentPassword("")
                 setNewPassword("")
                 setConfirmPassword("")
@@ -747,7 +760,7 @@ export default function AdminPage() {
                     localStorage.setItem("remembered_password", newPassword)
                 }
             } else {
-                setPasswordMessage({ type: 'error', text: data.error })
+                setPasswordMessage({ type: 'error', text: language === 'ar' ? data.error_ar : data.error_en })
             }
         } catch (err) {
             setPasswordMessage({ type: 'error', text: t('connection_error') })
@@ -781,13 +794,13 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
+        showMessage(data, res.ok)
         if (res.ok) {
-            alert(t('employee_added'))
             setName(""); setUsername(""); setPassword(""); setRole("employee")
             setEmail(""); setPhone(""); setJobTitleInput(""); setDepartmentId(""); setHireDateInput("")
             setShowAddForm(false)
             fetchEmployees()
-        } else alert(data.error)
+        }
     }
 
     const updateEmployee = async (emp: Employee) => {
@@ -807,10 +820,10 @@ export default function AdminPage() {
             })
         })
         const data = await res.json()
+        showMessage(data, res.ok)
         if (res.ok) {
-            alert(t('employee_updated'))
             fetchEmployees()
-        } else alert(data.error)
+        }
     }
 
     const deleteEmployee = async (id: string) => {
@@ -822,10 +835,10 @@ export default function AdminPage() {
             body: JSON.stringify({ id })
         })
         const data = await res.json()
+        showMessage(data, res.ok)
         if (res.ok) {
-            alert(t('employee_deleted'))
             fetchEmployees()
-        } else alert(data.error)
+        }
     }
 
     // =============================================
@@ -891,7 +904,7 @@ export default function AdminPage() {
                 } else {
                     const error = await res.json()
                     results.failed++
-                    results.errors.push(`${employeeData.name}: ${error.error}`)
+                    results.errors.push(`${employeeData.name}: ${language === 'ar' ? error.error_ar : error.error_en}`)
                 }
             } catch (error) {
                 results.failed++
@@ -956,12 +969,12 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            alert(t('department_added'))
+            showMessage(data, true)
             setDeptName("")
             setShowDeptForm(false)
             fetchDepartments()
         } else {
-            alert(data.error)
+            showMessage(data, false)
         }
     }
 
@@ -976,13 +989,13 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            alert(t('department_updated'))
+            showMessage(data, true)
             setDeptName("")
             setEditingDept(null)
             setShowDeptForm(false)
             fetchDepartments()
         } else {
-            alert(data.error)
+            showMessage(data, false)
         }
     }
 
@@ -995,10 +1008,10 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            alert(t('department_deleted'))
+            showMessage(data, true)
             fetchDepartments()
         } else {
-            alert(data.error)
+            showMessage(data, false)
         }
     }
 
@@ -1034,12 +1047,10 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
+        showMessage(data, res.ok)
         if (res.ok) {
-            alert(t('manager_added'))
             fetchDeptManagers(selectedDept.id)
             fetchDepartments()
-        } else {
-            alert(data.error)
         }
     }
 
@@ -1051,14 +1062,10 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        if (res.ok) {
-            alert(t('manager_removed'))
-            if (selectedDept) {
-                fetchDeptManagers(selectedDept.id)
-                fetchDepartments()
-            }
-        } else {
-            alert(data.error)
+        showMessage(data, res.ok)
+        if (res.ok && selectedDept) {
+            fetchDeptManagers(selectedDept.id)
+            fetchDepartments()
         }
     }
 
@@ -1089,7 +1096,7 @@ export default function AdminPage() {
                 })
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchAllRequests()
         } catch (err) { console.error(err) }
     }
@@ -1118,7 +1125,7 @@ export default function AdminPage() {
                 })
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             if (res.ok) fetchAllRequests()
         } catch (err) { console.error(err) }
     }
@@ -1137,7 +1144,7 @@ export default function AdminPage() {
                 body: JSON.stringify({ username: adminUsername, type, lat: currentPos.lat, lng: currentPos.lng })
             })
             const data = await res.json()
-            alert(data.message || data.error)
+            showMessage(data, res.ok)
             fetchTodayAttendance(adminUsername)
         } catch (err) { console.error(err); alert(t('error_occurred')) }
     }
@@ -1976,8 +1983,10 @@ export default function AdminPage() {
 
                         <div style={styles.balanceCard}>
                             <h4 style={styles.balanceTitle}>{t('leave_balance')}</h4>
-                            {leaveBalance.message && (
-                                <p style={styles.balanceMessage}>{leaveBalance.message}</p>
+                            {leaveBalance.message_ar && (
+                                <p style={styles.balanceMessage}>
+                                    {language === 'ar' ? leaveBalance.message_ar : leaveBalance.message_en}
+                                </p>
                             )}
 
                             <div style={styles.balanceRow}>
@@ -3330,25 +3339,20 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#1e293b',
         fontWeight: '500'
     },
-    // أنماط النص الأساسية
     textPrimary: {
         color: '#000000',
         fontSize: 14,
         fontWeight: 'normal',
     },
-
     textSecondary: {
         color: '#333333',
         fontSize: 13,
     },
-
     textBold: {
         color: '#000000',
         fontSize: 16,
         fontWeight: 'bold',
     },
-
-    // للعناصر القابلة للنقر
     clickableText: {
         color: '#000000',
         cursor: 'pointer',
