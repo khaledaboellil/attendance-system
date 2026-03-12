@@ -11,6 +11,7 @@ type LanguageContextType = {
     dir: 'rtl' | 'ltr'
 }
 
+// تعريف موحد للترجمات بدون تكرار
 const translations = {
     ar: {
         // عام
@@ -23,16 +24,13 @@ const translations = {
         'settings': 'الإعدادات',
         'logout': 'تسجيل خروج',
         'add': 'إضافة',
-        'cancel': 'إلغاء',
-        'save': 'حفظ',
-        'delete': 'حذف',
         'edit': 'تعديل',
+        'delete': 'حذف',
+        'save': 'حفظ',
+        'cancel': 'إلغاء',
         'search': 'بحث',
         'filter': 'تصفية',
         'all': 'الكل',
-        'pending': 'قيد الانتظار',
-        'approved': 'معتمدة',
-        'rejected': 'مرفوضة',
         'from': 'من',
         'to': 'إلى',
         'date': 'التاريخ',
@@ -60,6 +58,23 @@ const translations = {
         'success': 'تم بنجاح',
         'warning': 'تحذير',
         'info': 'معلومات',
+        'view': 'عرض',
+        'details': 'التفاصيل',
+
+        // حالات الطلبات
+        'pending': 'قيد الانتظار',
+        'approved': 'معتمدة',
+        'rejected': 'مرفوضة',
+
+        // أنواع الإجازات
+        'leave_type_annual': 'سنوية',
+        'leave_type_sick': 'مرضية',
+        'leave_type_emergency': 'عارضة',
+        'leave_type_unpaid': 'غير مدفوعة',
+        'annual_leave': 'إجازة سنوية',
+        'sick_leave': 'إجازة مرضية',
+        'emergency_leave': 'إجازة عارضة',
+        'unpaid_leave': 'إجازة غير مدفوعة',
 
         // صفحات الموظفين
         'employee_page': 'صفحة الموظف',
@@ -69,8 +84,6 @@ const translations = {
         'my_permissions': 'إذوني',
         'my_corrections': 'تصحيح بصمتي',
         'leave_balance': 'رصيد الإجازات',
-        'annual_leave': 'إجازة سنوية',
-        'emergency_leave': 'إجازة عارضة',
         'used': 'مستخدم',
         'remaining': 'المتبقي',
         'total': 'الإجمالي',
@@ -80,11 +93,8 @@ const translations = {
         'getting_location': 'جاري الحصول على الموقع...',
         'location_success': 'تم الحصول على الموقع بنجاح',
         'today_attendance': 'حضور اليوم',
-        'attendance_history': 'سجل الحضور السابق',
-        'new_leave_request': 'طلب إجازة جديد',
-        'new_overtime_request': 'طلب أوفر تايم جديد',
-        'new_permission_request': 'طلب إذن جديد',
-        'new_correction_request': 'طلب تصحيح جديد',
+        'attendance_history': 'سجل الحضور',
+        'new_request': 'طلب جديد',
         'leave_type': 'نوع الإجازة',
         'start_date': 'تاريخ البداية',
         'end_date': 'تاريخ النهاية',
@@ -94,6 +104,7 @@ const translations = {
         'expected_check_out': 'وقت الانصراف المفترض',
         'submit_request': 'تقديم الطلب',
         'previous_requests': 'الطلبات السابقة',
+        'correction_for': 'تصحيح ليوم',
 
         // صفحات المدير
         'manager_page': 'لوحة تحكم المدير',
@@ -133,6 +144,8 @@ const translations = {
         'attendance_report': 'تقرير الحضور',
         'absences_report': 'تقرير الغياب',
         'leaves_report': 'تقرير الإجازات',
+        'view_report': 'عرض التقرير',
+        'add_employee': 'إضافة موظف',
 
         // صفحة تسجيل الدخول
         'login': 'تسجيل الدخول',
@@ -141,16 +154,7 @@ const translations = {
         'checking': 'جاري التحقق...',
         'invalid_credentials': 'بيانات الدخول غير صحيحة',
 
-        // الفوتر
-        'footer': 'جميع الحقوق محفوظة',
-        'developed_by': 'تم التطوير بواسطة',
-        'request_leave': 'طلب إجازة',
-        'request_overtime': 'طلب أوفر تايم',
-        'request_permission': 'طلب إذن',
-        'request_correction': 'طلب تصحيح',
-        'cancel': 'إلغاء',
-        'add_employee': 'إضافة موظف',
-        'add_department': 'إضافة قسم',
+        // تغيير كلمة المرور
         'change_password': 'تغيير كلمة المرور',
         'current_password': 'كلمة المرور الحالية',
         'new_password': 'كلمة المرور الجديدة',
@@ -161,21 +165,14 @@ const translations = {
         'passwords_not_match': 'كلمة المرور الجديدة غير متطابقة',
         'password_min_length': 'كلمة المرور يجب أن تكون ٣ أحرف على الأقل',
         'connection_error': 'خطأ في الاتصال',
-        'correction_for': 'تصحيح ليوم',
-        'leave_type_annual': 'سنوية',
-        'leave_type_sick': 'مرضية',
-        'leave_type_emergency': 'عارضة',
-        'leave_type_unpaid': 'غير مدفوعة',
-        'annual_leave': 'إجازة سنوية',
-        'sick_leave': 'إجازة مرضية',
-        'emergency_leave': 'إجازة عارضة',
-        'unpaid_leave': 'إجازة غير مدفوعة',
-        'view_report': 'عرض التقرير'
+
+        // الفوتر
+        'footer': 'جميع الحقوق محفوظة',
+        'developed_by': 'تم التطوير بواسطة',
     },
     en: {
         // General
         'dashboard': 'Dashboard',
-        'view_report': 'View Report',
         'employees': 'Employees',
         'departments': 'Departments',
         'requests': 'Requests',
@@ -184,16 +181,13 @@ const translations = {
         'settings': 'Settings',
         'logout': 'Logout',
         'add': 'Add',
-        'cancel': 'Cancel',
-        'save': 'Save',
-        'delete': 'Delete',
         'edit': 'Edit',
+        'delete': 'Delete',
+        'save': 'Save',
+        'cancel': 'Cancel',
         'search': 'Search',
         'filter': 'Filter',
         'all': 'All',
-        'pending': 'Pending',
-        'approved': 'Approved',
-        'rejected': 'Rejected',
         'from': 'From',
         'to': 'To',
         'date': 'Date',
@@ -221,6 +215,23 @@ const translations = {
         'success': 'Success',
         'warning': 'Warning',
         'info': 'Info',
+        'view': 'View',
+        'details': 'Details',
+
+        // Request status
+        'pending': 'Pending',
+        'approved': 'Approved',
+        'rejected': 'Rejected',
+
+        // Leave types
+        'leave_type_annual': 'Annual',
+        'leave_type_sick': 'Sick',
+        'leave_type_emergency': 'Emergency',
+        'leave_type_unpaid': 'Unpaid',
+        'annual_leave': 'Annual Leave',
+        'sick_leave': 'Sick Leave',
+        'emergency_leave': 'Emergency Leave',
+        'unpaid_leave': 'Unpaid Leave',
 
         // Employee pages
         'employee_page': 'Employee Page',
@@ -230,8 +241,6 @@ const translations = {
         'my_permissions': 'My Permissions',
         'my_corrections': 'My Corrections',
         'leave_balance': 'Leave Balance',
-        'annual_leave': 'Annual Leave',
-        'emergency_leave': 'Emergency Leave',
         'used': 'Used',
         'remaining': 'Remaining',
         'total': 'Total',
@@ -242,10 +251,7 @@ const translations = {
         'location_success': 'Location obtained successfully',
         'today_attendance': "Today's Attendance",
         'attendance_history': 'Attendance History',
-        'new_leave_request': 'New Leave Request',
-        'new_overtime_request': 'New Overtime Request',
-        'new_permission_request': 'New Permission Request',
-        'new_correction_request': 'New Correction Request',
+        'new_request': 'New Request',
         'leave_type': 'Leave Type',
         'start_date': 'Start Date',
         'end_date': 'End Date',
@@ -255,6 +261,7 @@ const translations = {
         'expected_check_out': 'Expected Check Out',
         'submit_request': 'Submit Request',
         'previous_requests': 'Previous Requests',
+        'correction_for': 'Correction for',
 
         // Manager pages
         'manager_page': 'Manager Dashboard',
@@ -294,6 +301,8 @@ const translations = {
         'attendance_report': 'Attendance Report',
         'absences_report': 'Absences Report',
         'leaves_report': 'Leaves Report',
+        'view_report': 'View Report',
+        'add_employee': 'Add Employee',
 
         // Login page
         'login': 'Login',
@@ -302,15 +311,7 @@ const translations = {
         'checking': 'Checking...',
         'invalid_credentials': 'Invalid credentials',
 
-        // Footer
-        'request_leave': 'Request Leave',
-        'request_overtime': 'Request Overtime',
-        'request_permission': 'Request Permission',
-        'request_correction': 'Request Correction',
-        'cancel': 'Cancel',
-        'add_employee': 'Add Employee',
-        'add_department': 'Add Department',
-        // Password change settings
+        // Password change
         'change_password': 'Change Password',
         'current_password': 'Current Password',
         'new_password': 'New Password',
@@ -321,17 +322,10 @@ const translations = {
         'passwords_not_match': 'New passwords do not match',
         'password_min_length': 'Password must be at least 3 characters',
         'connection_error': 'Connection error',
-        'correction_for': 'Correction for',
-        'leave_type_annual': 'Annual',
-        'leave_type_sick': 'Sick',
-        'leave_type_emergency': 'Emergency',
-        'leave_type_unpaid': 'Unpaid',
-        'annual_leave': 'Annual Leave',
-        'sick_leave': 'Sick Leave',
-        'emergency_leave': 'Emergency Leave',
-        'unpaid_leave': 'Unpaid Leave',
-        
 
+        // Footer
+        'footer': 'All rights reserved',
+        'developed_by': 'Developed by',
     }
 }
 
