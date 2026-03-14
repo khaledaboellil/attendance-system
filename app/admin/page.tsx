@@ -566,7 +566,7 @@ export default function AdminPage() {
                 const hire = new Date(data.hire_date)
                 const today = new Date()
 
-                const diffMs = today - hire
+                const diffMs = today.getTime() - hire.getTime()
                 const years = diffMs / (1000 * 60 * 60 * 24 * 365)
                 setYearsOfService(years.toFixed(2) || 0)
                 console.log("✅ Leave balance fetched:", data)

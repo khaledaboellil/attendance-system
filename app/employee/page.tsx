@@ -302,11 +302,12 @@ export default function EmployeePage() {
                     message_ar: data.message_ar || "",
                     message_en: data.message_en || ""
                 })
+            
                 setHireDate(data.hire_date)
                 const hire = new Date(data.hire_date)
                 const today = new Date()
 
-                const diffMs = today - hire
+                const diffMs = today.getTime() - hire.getTime()
                 const years = diffMs / (1000 * 60 * 60 * 24 * 365)
                 setYearsOfService(years.toFixed(2) || 0)
                 console.log("✅ Leave balance fetched:", data)
