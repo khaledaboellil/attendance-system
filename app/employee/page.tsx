@@ -103,7 +103,7 @@ export default function EmployeePage() {
         message_ar: "",
         message_en: ""
     })
-    const [yearsOfService, setYearsOfService] = useState(0)
+    const [yearsOfService, setYearsOfService] = useState<string>("0")
     // ==================== Overtime Requests ====================
     const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([])
     const [showOvertimeForm, setShowOvertimeForm] = useState(false)
@@ -309,7 +309,7 @@ export default function EmployeePage() {
 
                 const diffMs = today.getTime() - hire.getTime()
                 const years = diffMs / (1000 * 60 * 60 * 24 * 365)
-                setYearsOfService(years.toFixed(2) || 0)
+                setYearsOfService(years.toFixed(2))
                 console.log("✅ Leave balance fetched:", data)
             } else {
                 console.error("❌ Error fetching leave balance:", data)

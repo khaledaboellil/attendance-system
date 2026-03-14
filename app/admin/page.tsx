@@ -73,7 +73,7 @@ export default function AdminPage() {
     const [adminId, setAdminId] = useState("")
     const [hireDate, setHireDate] = useState("")
     const [jobTitle, setJobTitle] = useState(t('hr_manager'))
-    const [yearsOfService, setYearsOfService] = useState(0)
+    const [yearsOfService, setYearsOfService] = useState<string>("0")
     const [adminManagedDepts, setAdminManagedDepts] = useState<number[]>([])
 
     // ==================== Tabs ====================
@@ -568,7 +568,7 @@ export default function AdminPage() {
 
                 const diffMs = today.getTime() - hire.getTime()
                 const years = diffMs / (1000 * 60 * 60 * 24 * 365)
-                setYearsOfService(years.toFixed(2) || 0)
+                setYearsOfService(years.toFixed(2))
                 console.log("✅ Leave balance fetched:", data)
             } else {
                 console.error("❌ Error fetching leave balance:", data)

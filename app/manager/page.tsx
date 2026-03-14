@@ -121,7 +121,7 @@ export default function ManagerPage() {
     const [managedDepts, setManagedDepts] = useState<number[]>([])
     const [managedDeptsNames, setManagedDeptsNames] = useState<string>("")
     const [departments, setDepartments] = useState<Department[]>([])
-    const [yearsOfService, setYearsOfService] = useState(0)
+    const [yearsOfService, setYearsOfService] = useState<string>("0")
     // ==================== Tabs ====================
     const [activeTab, setActiveTab] = useState<"requests" | "attendance" | "leave" | "overtime" | "permission" | "correction" | "settings">("requests")
 
@@ -402,7 +402,7 @@ export default function ManagerPage() {
 
                 const diffMs = today.getTime() - hire.getTime()
                 const years = diffMs / (1000 * 60 * 60 * 24 * 365)
-                setYearsOfService(years.toFixed(2) || 0)
+                setYearsOfService(years.toFixed(2))
                 console.log("✅ Leave balance fetched:", data)
             } else {
                 console.error("❌ Error fetching leave balance:", data)
