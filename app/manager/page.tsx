@@ -507,7 +507,7 @@ export default function ManagerPage() {
         if (leaveType === "سنوية" && days > leaveBalance.remaining_annual) {
             return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining_annual} ${t('days')}`)
         }
-        if (leaveType === "عارضة" && days > leaveBalance.emergency_remaining) {
+        if (leaveType === "عارضة" && days > leaveBalance.remaining_emergency) {
             return alert(`${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.remaining_emergency} ${t('days')}`)
         }
 
