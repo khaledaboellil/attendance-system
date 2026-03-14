@@ -504,7 +504,7 @@ export default function ManagerPage() {
         const end = new Date(leaveEnd)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-        if (leaveType === "سنوية" && days > leaveBalance.remaining_annua) {
+        if (leaveType === "سنوية" && days > leaveBalance.remaining_annual) {
             return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining_annual} ${t('days')}`)
         }
         if (leaveType === "عارضة" && days > leaveBalance.emergency_remaining) {
