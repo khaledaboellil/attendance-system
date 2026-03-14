@@ -505,10 +505,10 @@ export default function ManagerPage() {
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
         if (leaveType === "سنوية" && days > leaveBalance.remaining) {
-            return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining} ${t('days')}`)
+            return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining_annual} ${t('days')}`)
         }
         if (leaveType === "عارضة" && days > leaveBalance.emergency_remaining) {
-            return alert(`${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.emergency_remaining} ${t('days')}`)
+            return alert(`${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.remaining_emergency} ${t('days')}`)
         }
 
         const res = await fetch("/api/leave-requests", {
