@@ -6,15 +6,44 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-function getWorkingDays(from: string, to: string) {
+// دالة لجلب أيام العمل من الإعدادات
+async function getWorkingDays() {
+    const { data } = await supabase
+        .from("system_settings")
+        .select("working_days")
+        .eq("id", 1)
+        .single()
+
+    return data?.working_days || ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']
+}
+
+// دالة لتحويل اسم اليوم إلى رقم (0 = Sunday, 1 = Monday, ...)
+function getDayNumber(dayName: string): number {
+    const days: { [key: string]: number } = {
+        'Sunday': 0,
+        'Monday': 1,
+        'Tuesday': 2,
+        'Wednesday': 3,
+        'Thursday': 4,
+        'Friday': 5,
+        'Saturday': 6
+    }
+    return days[dayName] || 0
+}
+
+function getWorkingDaysList(from: string, to: string, workingDaysList: string[]) {
     const days: string[] = []
     const start = new Date(from)
     const end = new Date(to)
 
+    // تحويل أسماء أيام العمل إلى أرقام
+    const workingDayNumbers = workingDaysList.map(day => getDayNumber(day))
+
     while (start <= end) {
-        const day = start.getDay()
-        // استثناء الجمعة (5) والسبت (6)
-        if (day !== 5 && day !== 6) {
+        const dayOfWeek = start.getDay() // 0 = Sunday, 1 = Monday, ...
+
+        // إذا كان اليوم من ضمن أيام العمل المحددة
+        if (workingDayNumbers.includes(dayOfWeek)) {
             days.push(start.toISOString().split("T")[0])
         }
         start.setDate(start.getDate() + 1)
@@ -31,15 +60,21 @@ export async function GET(req: NextRequest) {
         const user_id = req.nextUrl.searchParams.get("user_id")
         const type = req.nextUrl.searchParams.get("type") // attendance or absence
 
-        if (!from || !to)
-            return NextResponse.json({ error: "يجب تحديد from و to" }, { status: 400 })
+        if (!from || !to) {
+            return NextResponse.json({
+                error_ar: "يجب تحديد تاريخ البداية والنهاية",
+                error_en: "From and to dates are required"
+            }, { status: 400 })
+        }
 
-        const workingDays = getWorkingDays(from, to)
+        // جلب أيام العمل من الإعدادات
+        const workingDaysList = await getWorkingDays()
+        const workingDays = getWorkingDaysList(from, to, workingDaysList)
 
         // جلب الموظفين حسب الصلاحية
         let employeeQuery = supabase
             .from("employees")
-            .select("id, name, username")
+            .select("id, name, username, department_id")
             .eq("role", "employee")
 
         // لو المدير، يجيب موظفي قسمه بس
@@ -58,14 +93,15 @@ export async function GET(req: NextRequest) {
         }
 
         // فلترة حسب القسم (لله الـ HR)
-        if (department_id && department_id !== "all") {
+        if (department_id && department_id !== "all" && department_id !== "null") {
             employeeQuery = employeeQuery.eq("department_id", department_id)
         }
 
         const { data: employees } = await employeeQuery
 
-        if (!employees?.length)
+        if (!employees?.length) {
             return NextResponse.json([])
+        }
 
         // جلب الحضور فى الفترة
         const { data: attendance } = await supabase
@@ -108,9 +144,17 @@ export async function GET(req: NextRequest) {
             )
 
             if (missedDays.length > 0) {
+                // جلب اسم القسم
+                const { data: dept } = await supabase
+                    .from("departments")
+                    .select("name")
+                    .eq("id", emp.department_id)
+                    .single()
+
                 absences.push({
                     employee: emp.name,
                     username: emp.username,
+                    department_name: dept?.name || "-",
                     missedDays
                 })
             }
@@ -122,7 +166,7 @@ export async function GET(req: NextRequest) {
                 .from("attendance")
                 .select(`
                     *,
-                    employees:employee_id (name, username)
+                    employees:employee_id (name, username, department_id)
                 `)
                 .gte("day", from)
                 .lte("day", to)
@@ -132,7 +176,11 @@ export async function GET(req: NextRequest) {
         }
 
         return NextResponse.json(absences)
-    } catch {
-        return NextResponse.json({ error: "حدث خطأ أثناء إنشاء التقرير" }, { status: 500 })
+    } catch (error) {
+        console.error(error)
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء إنشاء التقرير",
+            error_en: "Error generating report"
+        }, { status: 500 })
     }
 }

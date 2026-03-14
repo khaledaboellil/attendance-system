@@ -6,44 +6,10 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-function calculateYearsOfService(hireDate: Date, targetDate: Date): number {
-    const diffTime = Math.abs(targetDate.getTime() - hireDate.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays / 365
-}
-
-function calculateProportionalLeave(hireDate: Date, targetDate: Date, fullYearDays: number): number {
-    const endOfYear = new Date(targetDate.getFullYear(), 11, 31)
-    const daysWorked = Math.ceil((endOfYear.getTime() - hireDate.getTime()) / (1000 * 60 * 60 * 24))
-    const totalYearDays = 365
-    const proportionalDays = (daysWorked / totalYearDays) * fullYearDays
-    return Math.round(proportionalDays * 2) / 2
-}
-
-function getServiceMessage(years: number): { ar: string, en: string } {
-    if (years < 1) {
-        return {
-            ar: "أقل من سنة - يتم احتساب الرصيد نسبياً حسب تاريخ التعيين",
-            en: "Less than 1 year - Leave balance is calculated proportionally based on hire date"
-        }
-    } else if (years >= 1 && years < 10) {
-        return {
-            ar: "من سنة إلى 10 سنوات - رصيدك 14 يوم إجازة سنوية",
-            en: "1 to 10 years - You have 14 days annual leave"
-        }
-    } else {
-        return {
-            ar: "أكثر من 10 سنوات - رصيدك 23 يوم إجازة سنوية",
-            en: "More than 10 years - You have 23 days annual leave"
-        }
-    }
-}
-
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url)
         const employee_id = searchParams.get("employee_id")
-        const target_date = searchParams.get("target_date") || new Date().toISOString().split('T')[0]
 
         if (!employee_id) {
             return NextResponse.json({
@@ -52,9 +18,10 @@ export async function GET(req: NextRequest) {
             }, { status: 400 })
         }
 
+        // جلب بيانات الموظف
         const { data: employee, error: empError } = await supabase
             .from("employees")
-            .select("hire_date, used_leave_days")
+            .select("current_year_leave_days, current_year_emergency_days, name, hire_date")
             .eq("id", employee_id)
             .single()
 
@@ -65,49 +32,60 @@ export async function GET(req: NextRequest) {
             }, { status: 404 })
         }
 
-        if (!employee.hire_date) {
-            return NextResponse.json({
-                error_ar: "تاريخ التعيين غير مسجل لهذا الموظف",
-                error_en: "Hire date not recorded for this employee",
-                annual: 21,
-                emergency: 7
-            }, { status: 400 })
-        }
+        // حساب الإجازات السنوية المستخدمة من الطلبات المعتمدة
+        const { data: annualRequests } = await supabase
+            .from("leave_requests")
+            .select("start_date, end_date")
+            .eq("employee_id", employee_id)
+            .eq("leave_type", "سنوية")
+            .eq("status", "تمت الموافقة")
 
-        const hireDate = new Date(employee.hire_date)
-        const targetDate = new Date(target_date)
+        let usedAnnual = 0
+        annualRequests?.forEach(req => {
+            const s = new Date(req.start_date)
+            const e = new Date(req.end_date)
+            const d = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
+            usedAnnual += d
+        })
 
-        const yearsOfService = calculateYearsOfService(hireDate, targetDate)
+        // حساب الإجازات العارضة المستخدمة من الطلبات المعتمدة
+        const { data: emergencyRequests } = await supabase
+            .from("leave_requests")
+            .select("start_date, end_date")
+            .eq("employee_id", employee_id)
+            .eq("leave_type", "عارضة")
+            .eq("status", "تمت الموافقة")
 
-        let annualLeave = 0
-        const emergencyLeave = 7
+        let usedEmergency = 0
+        emergencyRequests?.forEach(req => {
+            const s = new Date(req.start_date)
+            const e = new Date(req.end_date)
+            const d = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
+            usedEmergency += d
+        })
 
-        if (yearsOfService < 1) {
-            annualLeave = calculateProportionalLeave(hireDate, targetDate, 8)
-        } else if (yearsOfService >= 1 && yearsOfService < 10) {
-            annualLeave = 14
-        } else {
-            annualLeave = 23
-        }
+        const annualTotal = employee.current_year_leave_days
+        const emergencyTotal = employee.current_year_emergency_days
 
-        const usedDays = employee.used_leave_days || 0
-        const remainingAnnual = Math.max(0, annualLeave - usedDays)
-        const message = getServiceMessage(yearsOfService)
+        const remainingAnnual = employee.current_year_leave_days
+        const remainingEmergency = employee.current_year_emergency_days
 
         return NextResponse.json({
             employee_id,
-            hire_date: employee.hire_date,
-            years_of_service: yearsOfService.toFixed(2),
-            annual_leave_total: annualLeave,
-            emergency_leave_total: emergencyLeave,
-            used_days: usedDays,
+            employee_name: employee.name,
+            hire_date: employee.hire_date || "",
+            annual_total: annualTotal,
+            emergency_total: emergencyTotal,
+            used_annual: usedAnnual,
+            used_emergency: usedEmergency,
             remaining_annual: remainingAnnual,
-            remaining_emergency: emergencyLeave,
-            message_ar: message.ar,
-            message_en: message.en
+            remaining_emergency: remainingEmergency,
+            message_ar: `رصيدك ${remainingAnnual} يوم إجازة سنوية و ${remainingEmergency} يوم إجازة عارضة`,
+            message_en: `Your balance is ${remainingAnnual} annual leave days and ${remainingEmergency} emergency leave days`
         })
 
     } catch (error) {
+        console.error("Error in leave-calculator:", error)
         return NextResponse.json({
             error_ar: "حدث خطأ أثناء حساب الرصيد",
             error_en: "Error calculating balance"

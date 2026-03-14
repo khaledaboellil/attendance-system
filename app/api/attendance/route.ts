@@ -27,36 +27,20 @@ export async function GET(req: NextRequest) {
     let type = searchParams.get("type")
 
     if (!type && username) type = "employee"
-    if (!type) {
-        return NextResponse.json({
-            error_ar: "نوع الطلب مطلوب",
-            error_en: "Request type is required"
-        }, { status: 400 })
-    }
+    if (!type) return NextResponse.json({ error: "type مطلوب" }, { status: 400 })
 
     const fromDate = from ? new Date(from) : null
     const toDate = to ? new Date(to) : null
 
     if (type === "employee") {
-        if (!username) {
-            return NextResponse.json({
-                error_ar: "اسم المستخدم مطلوب",
-                error_en: "Username is required"
-            }, { status: 400 })
-        }
+        if (!username) return NextResponse.json({ error: "username مطلوب" }, { status: 400 })
 
         const { data: emp } = await supabase
             .from("employees")
             .select("id")
             .eq("username", username)
             .single()
-
-        if (!emp) {
-            return NextResponse.json({
-                error_ar: "الموظف غير موجود",
-                error_en: "Employee not found"
-            }, { status: 404 })
-        }
+        if (!emp) return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
 
         let query = supabase
             .from("attendance")
@@ -71,20 +55,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === "admin") {
-        if (!fromDate || !toDate) {
-            return NextResponse.json({
-                error_ar: "حدد تاريخ البداية والنهاية",
-                error_en: "Please select from and to dates"
-            }, { status: 400 })
-        }
+        if (!fromDate || !toDate) return NextResponse.json({ error: "حدد from و to" }, { status: 400 })
 
         const { data: employees } = await supabase
             .from("employees")
             .select("id, name, username")
-
         if (!employees) return NextResponse.json([], { status: 200 })
 
         const results = []
+
         for (const emp of employees) {
             const days: string[] = []
             let d = new Date(fromDate)
@@ -112,61 +91,49 @@ export async function GET(req: NextRequest) {
                 missedDays
             })
         }
+
         return NextResponse.json(results, { status: 200 })
     }
 
-    return NextResponse.json({
-        error_ar: "نوع الطلب غير صحيح",
-        error_en: "Invalid request type"
-    }, { status: 400 })
+    return NextResponse.json({ error: "type غير صحيح" }, { status: 400 })
 }
 
 export async function POST(req: NextRequest) {
     try {
         const { username, type, lat, lng } = await req.json()
-
-        if (!username || !type || lat == null || lng == null) {
-            return NextResponse.json({
-                error_ar: "جميع الحقول مطلوبة",
-                error_en: "All fields are required"
-            }, { status: 400 })
-        }
+        if (!username || !type || lat == null || lng == null)
+            return NextResponse.json({ error: "املأ كل البيانات" }, { status: 400 })
 
         const { data: emp } = await supabase
             .from("employees")
-            .select("id, locations")
+            .select("id, locations, is_location_flexible")
             .eq("username", username)
             .single()
 
-        if (!emp) {
-            return NextResponse.json({
-                error_ar: "الموظف غير موجود",
-                error_en: "Employee not found"
-            }, { status: 404 })
-        }
+        if (!emp) return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
 
-        const { data: allowedLocations } = await supabase
-            .from("locations")
-            .select("id, name, lat, lng")
-            .in("id", emp.locations)
+        let matchedLocation = null
+        let locationText = ""
 
-        if (!allowedLocations?.length) {
-            return NextResponse.json({
-                error_ar: "لا توجد أماكن مسموحة لهذا الموظف",
-                error_en: "No allowed locations for this employee"
-            }, { status: 400 })
-        }
+        if (emp.is_location_flexible) {
+            locationText = `📍 مرن - (${lat}, ${lng})`
+        } else {
+            const { data: allowedLocations } = await supabase
+                .from("locations")
+                .select("id, name, lat, lng")
+                .in("id", emp.locations)
 
-        const matchedLocation = allowedLocations.find(loc => getDistance(lat, lng, loc.lat, loc.lng) <= 100)
-        if (!matchedLocation) {
-            return NextResponse.json({
-                error_ar: "أنت خارج النطاق المسموح به",
-                error_en: "You are outside the allowed range"
-            }, { status: 403 })
+            if (!allowedLocations?.length)
+                return NextResponse.json({ error: "لا توجد أماكن مسموحة" }, { status: 400 })
+
+            matchedLocation = allowedLocations.find(loc => getDistance(lat, lng, loc.lat, loc.lng) <= 100)
+            if (!matchedLocation)
+                return NextResponse.json({ error: "أنت خارج النطاق المسموح به" }, { status: 403 })
+
+            locationText = `${matchedLocation.name} - (${lat}, ${lng})`
         }
 
         const today = new Date().toISOString().split("T")[0]
-        const locationText = `${matchedLocation.name} - (${lat}, ${lng})`
 
         if (type === "check_in") {
             const { data: existing } = await supabase
@@ -176,12 +143,7 @@ export async function POST(req: NextRequest) {
                 .eq("day", today)
                 .single()
 
-            if (existing) {
-                return NextResponse.json({
-                    message_ar: "تم تسجيل الحضور مسبقاً",
-                    message_en: "Check-in already recorded"
-                })
-            }
+            if (existing) return NextResponse.json({ message: "الحضور مسجل مسبقاً" })
 
             await supabase.from("attendance").insert([{
                 employee_id: emp.id,
@@ -189,11 +151,7 @@ export async function POST(req: NextRequest) {
                 check_in: new Date(),
                 location: locationText
             }])
-
-            return NextResponse.json({
-                message_ar: "تم تسجيل الحضور بنجاح",
-                message_en: "Check-in recorded successfully"
-            })
+            return NextResponse.json({ message: "تم تسجيل الحضور" })
         }
 
         if (type === "check_out") {
@@ -204,40 +162,18 @@ export async function POST(req: NextRequest) {
                 .eq("day", today)
                 .single()
 
-            if (!existing) {
-                return NextResponse.json({
-                    error_ar: "لم يتم تسجيل حضور اليوم",
-                    error_en: "No check-in recorded for today"
-                }, { status: 400 })
-            }
-
-            if (existing.check_out) {
-                return NextResponse.json({
-                    message_ar: "تم تسجيل الانصراف مسبقاً",
-                    message_en: "Check-out already recorded"
-                })
-            }
+            if (!existing) return NextResponse.json({ error: "لم يتم تسجيل حضور اليوم" })
+            if (existing.check_out) return NextResponse.json({ message: "الانصراف مسجل مسبقاً" })
 
             await supabase
                 .from("attendance")
                 .update({ check_out: new Date(), location: locationText })
                 .eq("id", existing.id)
-
-            return NextResponse.json({
-                message_ar: "تم تسجيل الانصراف بنجاح",
-                message_en: "Check-out recorded successfully"
-            })
+            return NextResponse.json({ message: "تم تسجيل الانصراف" })
         }
 
-        return NextResponse.json({
-            error_ar: "نوع العملية غير صحيح",
-            error_en: "Invalid operation type"
-        }, { status: 400 })
-
+        return NextResponse.json({ error: "نوع غير صحيح" }, { status: 400 })
     } catch {
-        return NextResponse.json({
-            error_ar: "حدث خطأ في الخادم",
-            error_en: "Server error occurred"
-        }, { status: 500 })
+        return NextResponse.json({ error: "حدث خطأ" }, { status: 500 })
     }
 }

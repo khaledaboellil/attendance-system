@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
                 id,
                 manager_id,
                 department_id,
-                employees:manager_id (id, name, username, email, role),
+                employees:manager_id (id, name, username, role),
                 departments:department_id (id, name)
             `)
 

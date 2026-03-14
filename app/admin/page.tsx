@@ -10,12 +10,13 @@ type Employee = {
     name: string
     username: string
     role: string
-    email?: string
-    phone?: string
     job_title?: string
     department_id?: number
     department_name?: string
     hire_date?: string
+    current_year_leave_days?: number
+    current_year_emergency_days?: number
+    is_location_flexible?: boolean
 }
 
 type Department = {
@@ -66,17 +67,6 @@ export default function AdminPage() {
     const router = useRouter()
     const { t, language, dir } = useLanguage()
 
-    // دالة مساعدة لعرض الرسائل
-    const showMessage = (data: any, isSuccess: boolean = true) => {
-        const key = isSuccess ? 'message' : 'error'
-
-        if (data[`${key}_ar`] && data[`${key}_en`]) {
-            alert(language === 'ar' ? data[`${key}_ar`] : data[`${key}_en`])
-        } else if (data[key]) {
-            alert(data[key])
-        }
-    }
-
     // ==================== Admin Data ====================
     const [adminName, setAdminName] = useState("")
     const [adminUsername, setAdminUsername] = useState("")
@@ -94,6 +84,11 @@ export default function AdminPage() {
     const [departments, setDepartments] = useState<Department[]>([])
     const [loading, setLoading] = useState(false)
 
+    // ==================== Edit Employees State ====================
+    const [editedEmployees, setEditedEmployees] = useState<Record<string, Partial<Employee>>>({})
+    const [savingAll, setSavingAll] = useState(false)
+    const hasEdits = Object.keys(editedEmployees).length > 0
+
     // ==================== Sorting ====================
     const [sortConfig, setSortConfig] = useState<{
         key: keyof Employee | 'department_name'
@@ -106,11 +101,11 @@ export default function AdminPage() {
     const [username, setUsername] = useState("")
     const [password, setPassword] = useState("")
     const [role, setRole] = useState("employee")
-    const [email, setEmail] = useState("")
-    const [phone, setPhone] = useState("")
     const [jobTitleInput, setJobTitleInput] = useState("")
     const [departmentId, setDepartmentId] = useState<number | "">("")
     const [hireDateInput, setHireDateInput] = useState("")
+    const [annualLeaveDays, setAnnualLeaveDays] = useState(14)
+    const [emergencyLeaveDays, setEmergencyLeaveDays] = useState(7)
 
     // ==================== Excel Upload ====================
     const [excelFile, setExcelFile] = useState<File | null>(null)
@@ -165,23 +160,22 @@ export default function AdminPage() {
     // ==================== Leave Requests ====================
     const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
     const [showLeaveForm, setShowLeaveForm] = useState(false)
-    const [leaveType, setLeaveType] = useState("سنوية")
+    const [leaveType, setLeaveType] = useState(t('leave_type_annual'))
     const [leaveStart, setLeaveStart] = useState("")
     const [leaveEnd, setLeaveEnd] = useState("")
     const [leaveReason, setLeaveReason] = useState("")
     const [leaveBalance, setLeaveBalance] = useState({
-        total: 0,
-        used: 0,
-        remaining: 0,
-        emergency_total: 7,
-        emergency_used: 0,
-        emergency_remaining: 7,
-        yearsOfService: 0,
+        annual_total: 0,
+        emergency_total: 0,
+        used_annual: 0,
+        used_emergency: 0,
+        remaining_annual: 0,
+        remaining_emergency: 0,
         hire_date: "",
         message_ar: "",
         message_en: ""
     })
-
+    
     // ==================== Overtime Requests ====================
     const [overtimeRequests, setOvertimeRequests] = useState<any[]>([])
     const [showOvertimeForm, setShowOvertimeForm] = useState(false)
@@ -205,6 +199,84 @@ export default function AdminPage() {
     const [correctionCheckIn, setCorrectionCheckIn] = useState("")
     const [correctionCheckOut, setCorrectionCheckOut] = useState("")
     const [correctionReason, setCorrectionReason] = useState("")
+
+    // دالة مساعدة لعرض الرسائل
+    const showMessage = (data: any, isSuccess: boolean = true) => {
+        const key = isSuccess ? 'message' : 'error'
+
+        if (data[`${key}_ar`] && data[`${key}_en`]) {
+            alert(language === 'ar' ? data[`${key}_ar`] : data[`${key}_en`])
+        } else if (data[key]) {
+            alert(data[key])
+        } else if (typeof data === 'string') {
+            alert(data)
+        }
+    }
+
+    // =============================================
+    // Edit Functions
+    // =============================================
+    const handleEmployeeChange = (id: string, field: keyof Employee, value: any) => {
+        setEditedEmployees(prev => ({
+            ...prev,
+            [id]: {
+                ...prev[id],
+                [field]: value
+            }
+        }))
+    }
+
+    const getEmployeeValue = (id: string, field: keyof Employee) => {
+        if (editedEmployees[id] && field in editedEmployees[id]) {
+            return editedEmployees[id][field]
+        }
+        const employee = employees.find(emp => emp.id === id)
+        return employee ? employee[field] : ''
+    }
+
+    const saveAllEmployees = async () => {
+        if (Object.keys(editedEmployees).length === 0) {
+            showMessage({ message: t('no_changes_to_save') || 'لا توجد تغييرات للحفظ' }, false)
+            return
+        }
+
+        setSavingAll(true)
+        let success = 0
+        let failed = 0
+
+        for (const [id, changes] of Object.entries(editedEmployees)) {
+            try {
+                const res = await fetch("/api/employees", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id,
+                        ...changes
+                    })
+                })
+
+                if (res.ok) {
+                    success++
+                    setEmployees(prev => prev.map(emp =>
+                        emp.id === id ? { ...emp, ...changes } : emp
+                    ))
+                } else {
+                    failed++
+                }
+            } catch (error) {
+                console.error(error)
+                failed++
+            }
+        }
+
+        setEditedEmployees({})
+        setSavingAll(false)
+        showMessage({ message: `${t('success')}: ${success}, ${t('failed')}: ${failed}` }, true)
+    }
+
+    const cancelAllEdits = () => {
+        setEditedEmployees({})
+    }
 
     // =============================================
     // Sorting Functions
@@ -259,7 +331,7 @@ export default function AdminPage() {
         const storedJobTitle = localStorage.getItem("job_title")
 
         if (!storedName || !storedId || storedRole !== "admin") {
-            alert(t('unauthorized'))
+            showMessage({ message: t('unauthorized') }, false)
             router.push("/")
             return
         }
@@ -289,12 +361,12 @@ export default function AdminPage() {
                     setLoadingPos(false)
                 },
                 () => {
-                    alert(t('location_error'));
+                    showMessage({ message: t('location_error') }, false);
                     setLoadingPos(false)
                 }
             )
         } else {
-            alert(t('gps_not_supported'))
+            showMessage({ message: t('gps_not_supported') }, false)
             setLoadingPos(false)
         }
     }, [])
@@ -409,7 +481,10 @@ export default function AdminPage() {
     }
 
     const fetchAttendanceHistory = async () => {
-        if (!attendanceFrom || !attendanceTo) return alert(t('select_dates'))
+        if (!attendanceFrom || !attendanceTo) {
+            showMessage({ message: t('select_dates') }, false)
+            return
+        }
         try {
             const res = await fetch(`/api/attendance?username=${adminUsername}&from=${attendanceFrom}&to=${attendanceTo}`)
             if (res.ok) setAttendanceHistory(await res.json())
@@ -418,7 +493,7 @@ export default function AdminPage() {
 
     const fetchReport = async () => {
         if (!reportFrom || !reportTo) {
-            alert(t('select_dates'))
+            showMessage({ message: t('select_dates') }, false)
             return
         }
 
@@ -468,33 +543,50 @@ export default function AdminPage() {
         } catch (err) { console.error(err) }
     }
 
-    const fetchLeaveRequests = async (empId: string) => {
-        try {
-            const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
-            if (res.ok) {
-                const data = await res.json()
-                setLeaveRequests(data)
-            }
-        } catch (err) { console.error(err) }
-    }
-
+    // =============================================
+    // Leave Balance Functions
+    // =============================================
     const fetchLeaveBalance = async (empId: string) => {
         try {
             const res = await fetch(`/api/leave-calculator?employee_id=${empId}`)
             const data = await res.json()
             if (res.ok) {
                 setLeaveBalance({
-                    total: data.annual_leave_total || 0,
-                    used: data.used_days || 0,
-                    remaining: data.remaining_annual || 0,
-                    emergency_total: data.emergency_leave_total || 7,
-                    emergency_used: data.used_emergency_days || 0,
-                    emergency_remaining: data.remaining_emergency || 7,
-                    yearsOfService: data.years_of_service || 0,
+                    annual_total: data.annual_total,
+                    emergency_total: data.emergency_total,
+                    used_annual: data.used_annual,
+                    used_emergency: data.used_emergency,
+                    remaining_annual: data.remaining_annual,
+                    remaining_emergency: data.remaining_emergency,
                     hire_date: data.hire_date || "",
                     message_ar: data.message_ar || "",
                     message_en: data.message_en || ""
                 })
+                setHireDate(data.hire_date)
+                const hire = new Date(data.hire_date)
+                const today = new Date()
+
+                const diffMs = today - hire
+                const years = diffMs / (1000 * 60 * 60 * 24 * 365)
+                setYearsOfService(years.toFixed(2) || 0)
+                console.log("✅ Leave balance fetched:", data)
+            } else {
+                console.error("❌ Error fetching leave balance:", data)
+            }
+        } catch (err) {
+            console.error("❌ Exception in fetchLeaveBalance:", err)
+        }
+    }
+
+    // =============================================
+    // Leave Requests Functions
+    // =============================================
+    const fetchLeaveRequests = async (empId: string) => {
+        try {
+            const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setLeaveRequests(data)
             }
         } catch (err) { console.error(err) }
     }
@@ -533,17 +625,17 @@ export default function AdminPage() {
     // Submit Functions
     // =============================================
     const submitLeaveRequest = async () => {
-        if (!leaveStart || !leaveEnd) return alert(t('select_dates'))
+        if (!leaveStart || !leaveEnd) return showMessage({ message: t('select_date') }, false)
 
         const start = new Date(leaveStart)
         const end = new Date(leaveEnd)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-        if (leaveType === "سنوية" && days > leaveBalance.remaining) {
-            return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining} ${t('days')}`)
+        if (leaveType === "سنوية" && days > leaveBalance.remaining_annual) {
+            return showMessage({ message: `${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining_annual} ${t('days')}` }, false)
         }
-        if (leaveType === "عارضة" && days > leaveBalance.emergency_remaining) {
-            return alert(`${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.emergency_remaining} ${t('days')}`)
+        if (leaveType === "عارضة" && days > leaveBalance.remaining_emergency) {
+            return showMessage({ message: `${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.remaining_emergency} ${t('days')}` }, false)
         }
 
         const res = await fetch("/api/leave-requests", {
@@ -571,7 +663,7 @@ export default function AdminPage() {
     }
 
     const submitOvertimeRequest = async () => {
-        if (!overtimeDate || !overtimeHours) return alert(t('select_date_and_hours'))
+        if (!overtimeDate || !overtimeHours) return showMessage({ message: t('select_date_and_reason') }, false)
 
         const res = await fetch("/api/overtime-requests", {
             method: "POST",
@@ -596,12 +688,12 @@ export default function AdminPage() {
     }
 
     const submitPermissionRequest = async () => {
-        if (!permissionDate || !permissionReason) return alert(t('select_date_and_reason'))
+        if (!permissionDate || !permissionReason) return showMessage({ message: t('select_date_and_reason') }, false)
 
         if ((permissionType === "ساعة" || permissionType === "ساعتين") && !permissionStartTime) {
-            return alert(t('select_start_time'))
+            return showMessage({ message: t('select_start_time') }, false)
         }
-
+        
         const res = await fetch("/api/permission-requests", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -629,7 +721,7 @@ export default function AdminPage() {
     }
 
     const submitCorrectionRequest = async () => {
-        if (!correctionDate || !correctionReason) return alert(t('select_date_and_reason'))
+        if (!correctionDate || !correctionReason) return showMessage({ message: t('select_date_and_reason') }, false)
 
         const res = await fetch("/api/attendance-correction", {
             method: "POST",
@@ -751,7 +843,7 @@ export default function AdminPage() {
             const data = await res.json()
 
             if (res.ok) {
-                setPasswordMessage({ type: 'success', text: language === 'ar' ? data.message_ar : data.message_en })
+                setPasswordMessage({ type: 'success', text: data.message })
                 setCurrentPassword("")
                 setNewPassword("")
                 setConfirmPassword("")
@@ -760,7 +852,7 @@ export default function AdminPage() {
                     localStorage.setItem("remembered_password", newPassword)
                 }
             } else {
-                setPasswordMessage({ type: 'error', text: language === 'ar' ? data.error_ar : data.error_en })
+                setPasswordMessage({ type: 'error', text: data.error })
             }
         } catch (err) {
             setPasswordMessage({ type: 'error', text: t('connection_error') })
@@ -773,18 +865,22 @@ export default function AdminPage() {
     // Employee Functions
     // =============================================
     const addEmployee = async () => {
-        if (!name || !username || !password || !hireDateInput) return alert(t('fill_required_fields'))
+        if (!name || !username || !password || !hireDateInput) {
+            showMessage({ message: t('fill_required_fields') }, false)
+            return
+        }
 
         const employeeData: any = {
             name,
             username,
             password,
             role,
-            email,
-            phone,
             job_title: jobTitleInput,
             department_id: departmentId || null,
-            hire_date: hireDateInput
+            hire_date: hireDateInput,
+            current_year_leave_days: annualLeaveDays,
+            current_year_emergency_days: emergencyLeaveDays,
+            is_location_flexible: false
         }
 
         const res = await fetch("/api/employees", {
@@ -794,36 +890,14 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        showMessage(data, res.ok)
         if (res.ok) {
+            showMessage({ message: t('employee_added') }, true)
             setName(""); setUsername(""); setPassword(""); setRole("employee")
-            setEmail(""); setPhone(""); setJobTitleInput(""); setDepartmentId(""); setHireDateInput("")
+            setJobTitleInput(""); setDepartmentId(""); setHireDateInput("")
+            setAnnualLeaveDays(21); setEmergencyLeaveDays(7)
             setShowAddForm(false)
             fetchEmployees()
-        }
-    }
-
-    const updateEmployee = async (emp: Employee) => {
-        const res = await fetch("/api/employees", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                id: emp.id,
-                name: emp.name,
-                username: emp.username,
-                role: emp.role,
-                email: emp.email,
-                phone: emp.phone,
-                job_title: emp.job_title,
-                department_id: emp.department_id,
-                hire_date: emp.hire_date
-            })
-        })
-        const data = await res.json()
-        showMessage(data, res.ok)
-        if (res.ok) {
-            fetchEmployees()
-        }
+        } else showMessage(data, false)
     }
 
     const deleteEmployee = async (id: string) => {
@@ -835,9 +909,11 @@ export default function AdminPage() {
             body: JSON.stringify({ id })
         })
         const data = await res.json()
-        showMessage(data, res.ok)
         if (res.ok) {
+            showMessage({ message: t('employee_deleted') }, true)
             fetchEmployees()
+        } else {
+            showMessage(data, false)
         }
     }
 
@@ -864,7 +940,7 @@ export default function AdminPage() {
 
     const processBulkUpload = async () => {
         if (excelData.length === 0) {
-            alert(t('no_data_to_upload'))
+            showMessage({ message: t('no_data_to_upload') }, false)
             return
         }
 
@@ -880,11 +956,12 @@ export default function AdminPage() {
                     username: row[t('username_column')] || row['username'] || '',
                     password: row[t('password_column')] || row['password'] || '123456',
                     role: row[t('role_column')] || row['role'] || 'employee',
-                    email: row[t('email_column')] || row['email'] || '',
-                    phone: row[t('phone_column')] || row['phone'] || '',
                     job_title: row[t('job_title_column')] || row['job_title'] || '',
                     department_id: findDepartmentId(row[t('department_column')] || row['department']),
-                    hire_date: formatExcelDate(row[t('hire_date_column')] || row['hire_date'])
+                    hire_date: formatExcelDate(row[t('hire_date_column')] || row['hire_date']),
+                    current_year_leave_days: row['annual_leave_days'] ,
+                    current_year_emergency_days: row['emergency_leave_days'] ,
+                    is_location_flexible: row['location'] === 'مرن' || row['location'] === 'flexible' || false
                 }
 
                 if (!employeeData.name || !employeeData.username) {
@@ -904,7 +981,7 @@ export default function AdminPage() {
                 } else {
                     const error = await res.json()
                     results.failed++
-                    results.errors.push(`${employeeData.name}: ${language === 'ar' ? error.error_ar : error.error_en}`)
+                    results.errors.push(`${employeeData.name}: ${error.error}`)
                 }
             } catch (error) {
                 results.failed++
@@ -937,15 +1014,16 @@ export default function AdminPage() {
     const downloadTemplate = () => {
         const template = [
             {
-                [t('name_column')]: "Khaled",
-                [t('username_column')]: '2693939',
-                [t('password_column')]: '123',
-                [t('email_column')]: 'ahmed@example.com',
-                [t('phone_column')]: '0123456789',
-                [t('job_title_column')]: 'Design Engineer',
-                [t('department_column')]: 'Design',
-                [t('hire_date_column')]: '2026-03-11',
-                [t('role_column')]: 'employee'
+                [t('name_column') || 'name']: "Khaled",
+                [t('username_column') || 'username']: '2693939',
+                [t('password_column') || 'password']: '123',
+                [t('job_title_column') || 'job_title']: 'Design Engineer',
+                [t('department_column') || 'department']: 'Design',
+                [t('hire_date_column') || 'hire_date']: '2026-03-11',
+                [t('role_column') || 'role']: 'employee',
+                'annual_leave_days': 14,
+                'emergency_leave_days': 7,
+                'location': 'flexible'
             }
         ]
 
@@ -959,7 +1037,10 @@ export default function AdminPage() {
     // Department Management Functions
     // =============================================
     const addDepartment = async () => {
-        if (!deptName) return alert(t('department_name_required'))
+        if (!deptName) {
+            showMessage({ message: t('department_name_required') }, false)
+            return
+        }
 
         const res = await fetch("/api/departments", {
             method: "POST",
@@ -969,7 +1050,7 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            showMessage(data, true)
+            showMessage({ message: t('department_added') }, true)
             setDeptName("")
             setShowDeptForm(false)
             fetchDepartments()
@@ -978,8 +1059,11 @@ export default function AdminPage() {
         }
     }
 
+    // تأكد أن شكل الدالة النهائي كالتالي:
     const updateDepartment = async () => {
-        if (!editingDept || !deptName) return alert(t('department_name_required'))
+        if (!editingDept || !deptName) {
+            return showMessage({ message: t('department_name_required') }, false)
+        }
 
         const res = await fetch("/api/departments", {
             method: "PUT",
@@ -989,7 +1073,7 @@ export default function AdminPage() {
         const data = await res.json()
 
         if (res.ok) {
-            showMessage(data, true)
+            showMessage({ message: t('department_updated') }, true)
             setDeptName("")
             setEditingDept(null)
             setShowDeptForm(false)
@@ -1007,8 +1091,8 @@ export default function AdminPage() {
         })
         const data = await res.json()
 
-        if (res.ok) {
-            showMessage(data, true)
+        if (res.ok) { 
+            showMessage({ message: t('department_deleted') }, true)
             fetchDepartments()
         } else {
             showMessage(data, false)
@@ -1047,10 +1131,12 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        showMessage(data, res.ok)
         if (res.ok) {
+            showMessage({ message: t('manager_added') }, true)
             fetchDeptManagers(selectedDept.id)
             fetchDepartments()
+        } else {
+            showMessage(data, false)
         }
     }
 
@@ -1062,10 +1148,14 @@ export default function AdminPage() {
         })
 
         const data = await res.json()
-        showMessage(data, res.ok)
-        if (res.ok && selectedDept) {
-            fetchDeptManagers(selectedDept.id)
-            fetchDepartments()
+        if (res.ok) {
+            showMessage({ message: t('manager_removed') }, true)
+            if (selectedDept) {
+                fetchDeptManagers(selectedDept.id)
+                fetchDepartments()
+            }
+        } else {
+            showMessage(data, false)
         }
     }
 
@@ -1134,8 +1224,11 @@ export default function AdminPage() {
     // Attendance Functions
     // =============================================
     const handleCheck = async (type: "check_in" | "check_out") => {
-        if (loadingPos) { alert(t('getting_location')); return }
-        if (!currentPos.lat || !currentPos.lng) { alert(t('location_not_available')); return }
+        if (loadingPos) {
+            showMessage({ message: t('getting_location') }, false);
+            return
+        }
+        if (!currentPos.lat || !currentPos.lng) { showMessage({ message: t('location_not_available') }, false); return }
 
         try {
             const res = await fetch("/api/attendance", {
@@ -1146,7 +1239,7 @@ export default function AdminPage() {
             const data = await res.json()
             showMessage(data, res.ok)
             fetchTodayAttendance(adminUsername)
-        } catch (err) { console.error(err); alert(t('error_occurred')) }
+        } catch (err) { console.error(err); showMessage({ message: t('error_occurred') }, false) }
     }
 
     // =============================================
@@ -1381,9 +1474,21 @@ export default function AdminPage() {
                     <div style={styles.tabContent}>
                         <div style={styles.sectionHeader}>
                             <h3 style={styles.sectionTitle}>{t('employees')}</h3>
-                            <button onClick={() => setShowAddForm(!showAddForm)} style={styles.addButton}>
-                                {showAddForm ? `❌ ${t('cancel')}` : `➕ ${t('add_employee')}`}
-                            </button>
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <button onClick={() => setShowAddForm(!showAddForm)} style={styles.addButton}>
+                                    {showAddForm ? `❌ ${t('cancel')}` : `➕ ${t('add_employee')}`}
+                                </button>
+                                {hasEdits && (
+                                    <>
+                                        <button onClick={saveAllEmployees} disabled={savingAll} style={{ ...styles.saveButton, width: 'auto', padding: '8px 16px', fontSize: 14, opacity: savingAll ? 0.7 : 1, cursor: savingAll ? 'not-allowed' : 'pointer' }}>
+                                            {savingAll ? t('loading') : `💾 ${t('save_all')} (${Object.keys(editedEmployees).length})`}
+                                        </button>
+                                        <button onClick={cancelAllEdits} style={{ ...styles.cancelButton, padding: '8px 16px', fontSize: 14 }}>
+                                            ❌ {t('cancel_all')}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {showAddForm && (
@@ -1392,10 +1497,19 @@ export default function AdminPage() {
                                 <input type="text" placeholder={`${t('full_name')} *`} value={name} onChange={e => setName(e.target.value)} style={styles.input} />
                                 <input type="text" placeholder={`${t('username')} *`} value={username} onChange={e => setUsername(e.target.value)} style={styles.input} />
                                 <input type="password" placeholder={`${t('password')} *`} value={password} onChange={e => setPassword(e.target.value)} style={styles.input} />
-                                <input type="email" placeholder={t('email')} value={email} onChange={e => setEmail(e.target.value)} style={styles.input} />
-                                <input type="text" placeholder={t('phone')} value={phone} onChange={e => setPhone(e.target.value)} style={styles.input} />
+
                                 <input type="text" placeholder={t('job_title')} value={jobTitleInput} onChange={e => setJobTitleInput(e.target.value)} style={styles.input} />
                                 <input type="date" placeholder={`${t('hire_date')} *`} value={hireDateInput} onChange={e => setHireDateInput(e.target.value)} style={styles.input} required />
+                                <div style={styles.rowInputs}>
+                                    <div style={styles.halfInput}>
+                                        <label style={styles.label}>{t('annual_leave')}:</label>
+                                        <input type="number" step="1" min="0" value={annualLeaveDays} onChange={e => setAnnualLeaveDays(parseFloat(e.target.value))} style={styles.input} />
+                                    </div>
+                                    <div style={styles.halfInput}>
+                                        <label style={styles.label}>{t('emergency_leave')}:</label>
+                                        <input type="number" step="1" min="0" value={emergencyLeaveDays} onChange={e => setEmergencyLeaveDays(parseFloat(e.target.value))} style={styles.input} />
+                                    </div>
+                                </div>
                                 <select value={departmentId} onChange={e => setDepartmentId(e.target.value ? Number(e.target.value) : "")} style={styles.select}>
                                     <option value="">{t('select_department')}</option>
                                     {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
@@ -1405,94 +1519,102 @@ export default function AdminPage() {
                                     <option value="admin">{t('admin')}</option>
                                     <option value="manager">{t('manager')}</option>
                                 </select>
-                                <button onClick={addEmployee} style={styles.submitButton}>
-                                    ✅ {t('add_employee')}
-                                </button>
+                                <button onClick={addEmployee} style={styles.submitButton}>✅ {t('add_employee')}</button>
                             </div>
                         )}
 
                         <div style={styles.sortInfo}>
                             <span style={styles.sortHint}>{t('click_to_sort')}</span>
+                            {hasEdits && (
+                                <span style={{ ...styles.sortHint, marginRight: 10, backgroundColor: '#ff9800', color: 'white' }}>
+                                    {language === 'ar' ? `تعديلات على ${Object.keys(editedEmployees).length} موظف` : `Editing ${Object.keys(editedEmployees).length} employees`}
+                                </span>
+                            )}
                         </div>
 
                         <div style={styles.tableContainer}>
                             <table style={styles.table}>
                                 <thead>
                                     <tr>
-                                        <th style={styles.tableHeader} onClick={() => requestSort('name')}>
-                                            {t('name')} {getSortIcon('name')}
-                                        </th>
-                                        <th style={styles.tableHeader} onClick={() => requestSort('username')}>
-                                            {t('username')} {getSortIcon('username')}
-                                        </th>
-                                        <th style={styles.tableHeader} onClick={() => requestSort('department_name')}>
-                                            {t('department')} {getSortIcon('department_name')}
-                                        </th>
-                                        <th style={styles.tableHeader} onClick={() => requestSort('job_title')}>
-                                            {t('job_title')} {getSortIcon('job_title')}
-                                        </th>
-                                        <th style={styles.tableHeader} onClick={() => requestSort('hire_date')}>
-                                            {t('hire_date')} {getSortIcon('hire_date')}
-                                        </th>
-                                        <th style={styles.tableHeader} onClick={() => requestSort('role')}>
-                                            {t('role')} {getSortIcon('role')}
-                                        </th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('name')}>{t('name')} {getSortIcon('name')}</th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('username')}>{t('username')} {getSortIcon('username')}</th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('department_name')}>{t('department')} {getSortIcon('department_name')}</th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('job_title')}>{t('job_title')} {getSortIcon('job_title')}</th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('hire_date')}>{t('hire_date')} {getSortIcon('hire_date')}</th>
+                                        <th style={styles.tableHeader}>{t('annual_leave')}</th>
+                                        <th style={styles.tableHeader}>{t('emergency_leave')}</th>
+                                        <th style={styles.tableHeader}>{t('flexible_location')}</th>
+                                        <th style={styles.tableHeader} onClick={() => requestSort('role')}>{t('role')} {getSortIcon('role')}</th>
                                         <th style={styles.tableHeader}>{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {sortedEmployees.map(emp => (
-                                        <tr key={emp.id}>
-                                            <td style={styles.tableCell}>
-                                                <input type="text" value={emp.name} onChange={e => {
-                                                    const newEmployees = employees.map(item => item.id === emp.id ? { ...item, name: e.target.value } : item)
-                                                    setEmployees(newEmployees)
-                                                }} style={styles.tableInput} />
-                                            </td>
-                                            <td style={styles.tableCell}>
-                                                <input type="text" value={emp.username} onChange={e => {
-                                                    const newEmployees = employees.map(item => item.id === emp.id ? { ...item, username: e.target.value } : item)
-                                                    setEmployees(newEmployees)
-                                                }} style={styles.tableInput} />
-                                            </td>
-                                            <td style={styles.tableCell}>
-                                                <select value={emp.department_id || ""} onChange={e => {
-                                                    const newDeptId = e.target.value ? Number(e.target.value) : undefined
-                                                    const newEmployees = employees.map(item => item.id === emp.id ? { ...item, department_id: newDeptId } : item)
-                                                    setEmployees(newEmployees)
-                                                }} style={styles.tableSelect}>
-                                                    <option value="">{t('no_department')}</option>
-                                                    {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
-                                                </select>
-                                            </td>
-                                            <td style={styles.tableCell}>
-                                                <input type="text" value={emp.job_title || ""} onChange={e => {
-                                                    const newEmployees = employees.map(item => item.id === emp.id ? { ...item, job_title: e.target.value } : item)
-                                                    setEmployees(newEmployees)
-                                                }} style={styles.tableInput} />
-                                            </td>
-                                            <td style={styles.tableCell}>
-                                                <input type="date" value={emp.hire_date || ""} onChange={e => {
-                                                    const newEmployees = employees.map(item => item.id === emp.id ? { ...item, hire_date: e.target.value } : item)
-                                                    setEmployees(newEmployees)
-                                                }} style={styles.tableInput} />
-                                            </td>
-                                            <td style={styles.tableCell}>
-                                                <select value={emp.role} onChange={e => {
-                                                    const newEmployees = employees.map(item => item.id === emp.id ? { ...item, role: e.target.value } : item)
-                                                    setEmployees(newEmployees)
-                                                }} style={styles.tableSelect}>
-                                                    <option value="employee">{t('employee')}</option>
-                                                    <option value="admin">{t('admin')}</option>
-                                                    <option value="manager">{t('manager')}</option>
-                                                </select>
-                                            </td>
-                                            <td style={styles.tableCell}>
-                                                <button onClick={() => updateEmployee(emp)} style={styles.editButton}>💾 {t('save')}</button>
-                                                <button onClick={() => deleteEmployee(emp.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {sortedEmployees.map(emp => {
+                                        const isEdited = !!editedEmployees[emp.id]
+                                        return (
+                                            <tr key={emp.id} style={isEdited ? { backgroundColor: '#fff3e0' } : {}}>
+                                                <td style={styles.tableCell}>
+                                                    <input type="text" value={getEmployeeValue(emp.id, 'name') as string} onChange={e => handleEmployeeChange(emp.id, 'name', e.target.value)} style={styles.tableInput} />
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <input type="text" value={getEmployeeValue(emp.id, 'username') as string} onChange={e => handleEmployeeChange(emp.id, 'username', e.target.value)} style={styles.tableInput} />
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <select value={getEmployeeValue(emp.id, 'department_id') as number || ""} onChange={e => handleEmployeeChange(emp.id, 'department_id', e.target.value ? Number(e.target.value) : undefined)} style={styles.tableSelect}>
+                                                        <option value="">{t('no_department')}</option>
+                                                        {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <input type="text" value={getEmployeeValue(emp.id, 'job_title') as string || ""} onChange={e => handleEmployeeChange(emp.id, 'job_title', e.target.value)} style={styles.tableInput} />
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <input type="date" value={getEmployeeValue(emp.id, 'hire_date') as string || ""} onChange={e => handleEmployeeChange(emp.id, 'hire_date', e.target.value)} style={styles.tableInput} />
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <input type="number" step="1" min="0" value={getEmployeeValue(emp.id, 'current_year_leave_days') as number || 0} onChange={e => handleEmployeeChange(emp.id, 'current_year_leave_days', parseFloat(e.target.value) || 0)} style={styles.tableInput} />
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <input type="number" step="1" min="0" value={getEmployeeValue(emp.id, 'current_year_emergency_days') as number || 0} onChange={e => handleEmployeeChange(emp.id, 'current_year_emergency_days', parseFloat(e.target.value) || 0)} style={styles.tableInput} />
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <label style={styles.switch}>
+                                                        <input
+                                                            type="checkbox"
+                                                            style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }}
+                                                            checked={getEmployeeValue(emp.id, 'is_location_flexible') as boolean || false}
+                                                            onChange={(e) => {
+                                                                handleEmployeeChange(emp.id, 'is_location_flexible', e.target.checked)
+                                                            }}
+                                                        />
+                                                        <span
+                                                            style={{
+                                                                ...styles.slider,
+                                                                ...(getEmployeeValue(emp.id, 'is_location_flexible') ? styles.sliderChecked : {})
+                                                            }}
+                                                        >
+                                                            <span
+                                                                style={{
+                                                                    ...styles.sliderBefore,
+                                                                    ...(getEmployeeValue(emp.id, 'is_location_flexible') ? styles.sliderBeforeChecked : {})
+                                                                }}
+                                                            />
+                                                        </span>
+                                                    </label>
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <select value={getEmployeeValue(emp.id, 'role') as string} onChange={e => handleEmployeeChange(emp.id, 'role', e.target.value)} style={styles.tableSelect}>
+                                                        <option value="employee">{t('employee')}</option>
+                                                        <option value="admin">{t('admin')}</option>
+                                                        <option value="manager">{t('manager')}</option>
+                                                    </select>
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                    <button onClick={() => deleteEmployee(emp.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -1507,16 +1629,12 @@ export default function AdminPage() {
                             <p style={styles.uploadInfo}>
                                 {t('upload_info')}
                                 <br />
-                                {t('required_columns')}: {t('name')}, {t('username')}, {t('password')}, {t('email')}, {t('phone')}, {t('job_title')}, {t('department')}, {t('hire_date')}, {t('role')}
+                                {t('required_columns')}: {t('name')}, {t('username')}, {t('password')}, {t('job_title')}, {t('department')}, {t('hire_date')}, {t('role')}, annual_leave_days, emergency_leave_days, location
                             </p>
                             <div style={styles.uploadButtons}>
-                                <button onClick={downloadTemplate} style={styles.templateButton}>
-                                    📥 {t('download_template')}
-                                </button>
+                                <button onClick={downloadTemplate} style={styles.templateButton}>📥 {t('download_template')}</button>
                                 <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} style={styles.fileInput} id="excel-upload" />
-                                <label htmlFor="excel-upload" style={styles.fileLabel}>
-                                    📂 {t('choose_file')}
-                                </label>
+                                <label htmlFor="excel-upload" style={styles.fileLabel}>📂 {t('choose_file')}</label>
                             </div>
                             {excelFile && (
                                 <div style={styles.fileInfo}>
@@ -1983,136 +2101,108 @@ export default function AdminPage() {
 
                         <div style={styles.balanceCard}>
                             <h4 style={styles.balanceTitle}>{t('leave_balance')}</h4>
+
+                            {/* رسالة الرصيد (اختياري) */}
                             {leaveBalance.message_ar && (
                                 <p style={styles.balanceMessage}>
                                     {language === 'ar' ? leaveBalance.message_ar : leaveBalance.message_en}
                                 </p>
                             )}
 
+                            {/* عرض الرصيد مباشرة من قاعدة البيانات - بدون أي حسابات */}
                             <div style={styles.balanceRow}>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>{t('annual_total')}</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.total} {t('days')}</span>
+                                    <span style={styles.balanceLabel}>{t('annual_leave')}</span>
+                                    <span style={styles.balanceValue}>
+                                        {leaveBalance.annual_total} {t('days')}
+                                    </span>
                                 </div>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>{t('used')}</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.used} {t('days')}</span>
-                                </div>
-                                <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>{t('remaining')}</span>
-                                    <span style={{ ...styles.balanceValue, color: leaveBalance.remaining > 0 ? '#4caf50' : '#f44336', fontWeight: 'bold' }}>
-                                        {leaveBalance.remaining} {t('days')}
+                                    <span style={styles.balanceLabel}>{t('emergency_leave')}</span>
+                                    <span style={styles.balanceValue}>
+                                        {leaveBalance.emergency_total} {t('days')}
                                     </span>
                                 </div>
                             </div>
 
-                            <hr style={styles.balanceDivider} />
 
-                            <div style={styles.emergencyRow}>
-                                <div style={styles.emergencyItem}>
-                                    <span style={styles.emergencyLabel}>{t('emergency_leave')}</span>
-                                    <span style={styles.emergencyValue}>
-                                        {leaveBalance.emergency_remaining} / {leaveBalance.emergency_total} {t('days')}
-                                    </span>
-                                </div>
-                                <div style={styles.emergencyProgress}>
-                                    <div style={{ ...styles.emergencyProgressBar, width: `${(leaveBalance.emergency_used / leaveBalance.emergency_total) * 100}%` }} />
-                                </div>
-                            </div>
                         </div>
 
+                        {/* نموذج طلب إجازة جديد */}
                         {showLeaveForm && (
                             <div style={styles.formCard}>
                                 <h4 style={styles.formTitle}>{t('new_leave_request')}</h4>
-
                                 <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={styles.select}>
                                     <option value="سنوية">{t('annual_leave')}</option>
                                     <option value="مرضية">{t('sick_leave')}</option>
                                     <option value="عارضة">{t('emergency_leave')}</option>
                                     <option value="غير مدفوعة">{t('unpaid_leave')}</option>
                                 </select>
-
                                 <div style={styles.dateRow}>
+                                    {/* تاريخ البداية */}
                                     <div style={styles.dateField}>
                                         <label style={styles.label}>{t('from')}:</label>
-                                        <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} style={styles.dateInput} />
+                                        <input
+                                            type="date"
+                                            value={leaveStart}
+                                            onChange={e => {
+                                                setLeaveStart(e.target.value)
+
+                                            }}
+                                            style={styles.dateInput}
+                                        />
                                     </div>
+                                    {/* تاريخ النهاية */}
                                     <div style={styles.dateField}>
                                         <label style={styles.label}>{t('to')}:</label>
-                                        <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} style={styles.dateInput} />
+                                        <input
+                                            type="date"
+                                            value={leaveEnd}
+                                            onChange={e => setLeaveEnd(e.target.value)}
+                                            style={styles.dateInput}
+                                            min={leaveStart || new Date().toISOString().split('T')[0]} // ✅ مش أقل من تاريخ البداية
+                                        />
                                     </div>
+
                                 </div>
-
-                                <textarea
-                                    placeholder={t('reason_optional')}
-                                    value={leaveReason}
-                                    onChange={e => setLeaveReason(e.target.value)}
-                                    style={styles.textarea}
-                                    rows={3}
-                                />
-
-                                <button onClick={submitLeaveRequest} style={styles.submitButton}>
-                                    ✅ {t('submit_request')}
-                                </button>
+                                <textarea placeholder={t('reason_optional')} value={leaveReason} onChange={e => setLeaveReason(e.target.value)} style={styles.textarea} rows={3} />
+                                <button onClick={submitLeaveRequest} style={styles.submitButton}>✅ {t('submit_request')}</button>
                             </div>
                         )}
 
+                        {/* الطلبات السابقة */}
                         <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
-                            {leaveRequests.length === 0 && !showLeaveForm && (
-                                <p style={styles.noData}>{t('no_requests')}</p>
-                            )}
-                            {leaveRequests.map(req => {
-                                const status = getApprovalStatus(req)
-                                return (
-                                    <div key={req.id} style={styles.requestCard}>
-                                        <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>{req.leave_type}</span>
-                                            {req.status === "مرفوضة" ? (
-                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
-                                                    ❌ {t('rejected')}
-                                                </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
-                                                <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
-                                                    ✅ {t('approved')}
-                                                </span>
-                                            ) : (
-                                                <div style={styles.approvalContainer}>
-                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
-                                                        <span style={styles.approvalLabel}>HR</span>
-                                                        <span style={{ color: req.hr_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
-                                                            {req.hr_approved ? '✅' : '⏳'}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ ...styles.approvalRow, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
-                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
-                                                        <span style={{ color: req.manager_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>
-                                                            {req.manager_approved ? '✅' : '⏳'}
-                                                        </span>
-                                                    </div>
+                            {leaveRequests.length === 0 && !showLeaveForm && <p style={styles.noData}>{t('no_requests')}</p>}
+                            {leaveRequests.map(req => (
+                                <div key={req.id} style={styles.requestCard}>
+                                    <div style={styles.requestHeader}>
+                                        <span style={styles.requestType}>{req.leave_type}</span>
+                                        {req.status === "مرفوضة" ? (
+                                            <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>❌ {t('rejected')}</span>
+                                        ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>✅ {t('approved')}</span>
+                                        ) : (
+                                            <div style={styles.approvalContainer}>
+                                                <div style={{ ...styles.approvalRow, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                    <span style={styles.approvalLabel}>HR</span>
+                                                    <span style={{ color: req.hr_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>{req.hr_approved ? '✅' : '⏳'}</span>
                                                 </div>
-                                            )}
-                                        </div>
-
-                                        <p style={styles.requestDates}>
-                                            {t('from')} {formatDate(req.start_date)} {t('to')} {formatDate(req.end_date)}
-                                        </p>
-
-                                        {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
-
-                                        <div style={styles.requestFooter}>
-                                            <span style={styles.requestDate}>
-                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
-                                            </span>
-                                            {req.status === "قيد الانتظار" && (
-                                                <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>
-                                                    🗑️ {t('delete')}
-                                                </button>
-                                            )}
-                                        </div>
+                                                <div style={{ ...styles.approvalRow, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                    <span style={styles.approvalLabel}>{t('manager')}</span>
+                                                    <span style={{ color: req.manager_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>{req.manager_approved ? '✅' : '⏳'}</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )
-                            })}
+                                    <p style={styles.requestDates}>{t('from')} {formatDate(req.start_date)} {t('to')} {formatDate(req.end_date)}</p>
+                                    {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
+                                    <div style={styles.requestFooter}>
+                                        <span style={styles.requestDate}>{t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
+                                        {req.status === "قيد الانتظار" && <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -2851,6 +2941,28 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: 'pointer',
         fontSize: 14
     },
+    saveButton: {
+        width: '100%',
+        padding: 12,
+        border: 'none',
+        borderRadius: 8,
+        backgroundColor: '#3b82f6',
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 16,
+        cursor: 'pointer',
+        transition: 'background-color 0.2s'
+    },
+    cancelButton: {
+        padding: '8px 16px',
+        border: 'none',
+        borderRadius: 8,
+        backgroundColor: '#9e9e9e',
+        color: 'white',
+        fontWeight: '500',
+        cursor: 'pointer',
+        fontSize: 14
+    },
     managerBadge: {
         backgroundColor: '#ff9800',
         color: 'white',
@@ -3114,18 +3226,6 @@ const styles: { [key: string]: React.CSSProperties } = {
         fontSize: 14,
         textAlign: 'center'
     },
-    saveButton: {
-        width: '100%',
-        padding: 12,
-        border: 'none',
-        borderRadius: 8,
-        backgroundColor: '#3b82f6',
-        color: '#fff',
-        fontWeight: '600',
-        fontSize: 16,
-        cursor: 'pointer',
-        transition: 'background-color 0.2s'
-    },
     approvalBadge: {
         padding: '4px 8px',
         borderRadius: 16,
@@ -3159,6 +3259,14 @@ const styles: { [key: string]: React.CSSProperties } = {
         fontSize: 14,
         marginBottom: 4,
         display: 'block'
+    },
+    rowInputs: {
+        display: 'flex',
+        gap: 10,
+        marginBottom: 12
+    },
+    halfInput: {
+        flex: 1
     },
     dateRow: {
         display: 'flex',
@@ -3339,6 +3447,44 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#1e293b',
         fontWeight: '500'
     },
+    // أنماط التبديل (Toggle Switch)
+    switch: {
+        position: 'relative',
+        display: 'inline-block',
+        width: '50px',
+        height: '24px',
+        margin: '0 auto',
+        cursor: 'pointer'
+    },
+    slider: {
+        position: 'absolute',
+        cursor: 'pointer',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#ccc',
+        transition: '.4s',
+        borderRadius: '24px'
+    },
+    sliderChecked: {
+        backgroundColor: '#4caf50'
+    },
+    sliderBefore: {
+        position: 'absolute',
+        content: '""',
+        height: '20px',
+        width: '20px',
+        left: '2px',
+        bottom: '2px',
+        backgroundColor: 'white',
+        transition: '.4s',
+        borderRadius: '50%'
+    },
+    sliderBeforeChecked: {
+        transform: 'translateX(26px)'
+    },
+    // أنماط النص الأساسية
     textPrimary: {
         color: '#000000',
         fontSize: 14,

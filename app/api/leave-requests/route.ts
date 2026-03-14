@@ -103,35 +103,7 @@ export async function GET(req: NextRequest) {
             }, { status: 500 })
         }
 
-        const formattedData = data?.map(req => {
-            let approval_status = ""
-            let pending_from = ""
-
-            if (req.status === "مرفوضة") {
-                approval_status = "مرفوضة"
-            } else if (req.status === "تمت الموافقة") {
-                approval_status = "معتمدة"
-            } else {
-                if (!req.hr_approved && !req.manager_approved) {
-                    approval_status = "في انتظار HR ومدير"
-                    pending_from = "الموارد البشرية والمدير"
-                } else if (!req.hr_approved) {
-                    approval_status = "في انتظار HR"
-                    pending_from = "الموارد البشرية"
-                } else if (!req.manager_approved) {
-                    approval_status = "في انتظار مدير"
-                    pending_from = "أحد المدراء"
-                }
-            }
-
-            return {
-                ...req,
-                approval_status,
-                pending_from
-            }
-        })
-
-        return NextResponse.json(formattedData || [])
+        return NextResponse.json(data || [])
 
     } catch (error) {
         return NextResponse.json({
@@ -162,34 +134,82 @@ export async function POST(req: NextRequest) {
 
         const start = new Date(start_date)
         const end = new Date(end_date)
-        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        const requestedDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+        // جلب بيانات الموظف
+        const { data: employee, error: empError } = await supabase
+            .from("employees")
+            .select("current_year_leave_days, current_year_emergency_days")
+            .eq("id", employee_id)
+            .single()
+
+        if (empError || !employee) {
+            return NextResponse.json({
+                error_ar: "خطأ في جلب بيانات الموظف",
+                error_en: "Error fetching employee data"
+            }, { status: 500 })
+        }
+
+        // جلب الطلبات السابقة (معتمدة + معلقة) لنفس السنة
+        const currentYear = new Date().getFullYear()
+        const yearStart = `${currentYear}-01-01`
+        const yearEnd = `${currentYear}-12-31`
+
+        const { data: allRequests } = await supabase
+            .from("leave_requests")
+            .select("start_date, end_date, leave_type, status")
+            .eq("employee_id", employee_id)
+            .gte("start_date", yearStart)
+            .lte("end_date", yearEnd)
 
         if (leave_type === "سنوية") {
-            const { data: employee, error: empError } = await supabase
-                .from("employees")
-                .select("used_leave_days, total_leave_days")
-                .eq("id", employee_id)
-                .single()
+            // حساب الإجازات السنوية المستخدمة من الطلبات (معتمدة + معلقة)
+            let usedAnnual = 0
+            allRequests?.forEach(req => {
+                if (req.leave_type === "سنوية" && req.status !== "مرفوضة" && req.status !== "معتمدة")
+                { // معلقة أو معتمدة
+                    const s = new Date(req.start_date)
+                    const e = new Date(req.end_date)
+                    const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                    usedAnnual += days
+                }
+            })
 
-            if (empError) {
+            const total = employee.current_year_leave_days
+            const remaining = total - usedAnnual
+
+            if (requestedDays > remaining) {
                 return NextResponse.json({
-                    error_ar: "خطأ في جلب بيانات الموظف",
-                    error_en: "Error fetching employee data"
-                }, { status: 500 })
+                    error_ar: `لا يوجد رصيد كافٍ. رصيدك المتبقي: ${remaining} يوم (بما في ذلك الطلبات المعلقة)`,
+                    error_en: `Insufficient balance. Your remaining balance: ${remaining} days (including pending requests)`
+                }, { status: 400 })
             }
+        }
+        else if (leave_type === "عارضة") {
+            // حساب الإجازات العارضة المستخدمة من الطلبات (معتمدة + معلقة)
+            let usedEmergency = 0
+            allRequests?.forEach(req => {
+                if (req.leave_type === "عارضة" && req.status !== "مرفوضة" && req.status !== "معتمدة")
+                { // معلقة أو معتمدة
+                    const s = new Date(req.start_date)
+                    const e = new Date(req.end_date)
+                    const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                    usedEmergency += days
+                }
+            })
 
-            const total = employee?.total_leave_days || 21
-            const used = employee?.used_leave_days || 0
-            const remaining = total - used
+            const emergencyTotal = employee.current_year_emergency_days
+            const remainingEmergency = emergencyTotal - usedEmergency
 
-            if (days > remaining) {
+            if (requestedDays > remainingEmergency) {
                 return NextResponse.json({
-                    error_ar: `لا يوجد رصيد كافٍ. المتبقي: ${remaining} يوم`,
-                    error_en: `Insufficient balance. Remaining: ${remaining} days`
+                    error_ar: `لا يوجد رصيد إجازات عارضة كافٍ. المتبقي: ${remainingEmergency} يوم (بما في ذلك الطلبات المعلقة)`,
+                    error_en: `Insufficient emergency leave balance. Remaining: ${remainingEmergency} days (including pending requests)`
                 }, { status: 400 })
             }
         }
 
+        // التحقق من عدم وجود طلب مكرر في نفس الفترة
         const { data: existing, error: existingError } = await supabase
             .from("leave_requests")
             .select("*")
@@ -204,6 +224,7 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
+        // إنشاء الطلب الجديد
         const { error } = await supabase
             .from("leave_requests")
             .insert([{
@@ -229,7 +250,8 @@ export async function POST(req: NextRequest) {
             message_en: "Leave request submitted successfully"
         })
 
-    } catch {
+    } catch (error) {
+        console.error("Error in POST:", error)
         return NextResponse.json({
             error_ar: "حدث خطأ أثناء إنشاء الطلب",
             error_en: "Error creating request"
@@ -240,6 +262,8 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
     try {
         const { id, action, approved_by, user_role, is_admin_as_manager } = await req.json()
+
+        console.log("🔍 PATCH received:", { id, action, approved_by, user_role, is_admin_as_manager })
 
         if (!id || !action || !approved_by || !user_role) {
             return NextResponse.json({
@@ -256,6 +280,8 @@ export async function PATCH(req: NextRequest) {
             `)
             .eq("id", id)
             .single()
+
+        console.log("📋 Request found:", request)
 
         if (fetchError || !request) {
             return NextResponse.json({
@@ -293,6 +319,11 @@ export async function PATCH(req: NextRequest) {
             })
         }
 
+        // حساب عدد الأيام
+        const start = new Date(request.start_date)
+        const end = new Date(request.end_date)
+        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
         let updateData: any = { updated_at: new Date() }
 
         if (is_admin_as_manager && user_role === "hr") {
@@ -302,22 +333,57 @@ export async function PATCH(req: NextRequest) {
             updateData.manager_approved_by = approved_by
             updateData.status = "تمت الموافقة"
 
+            // تحديث رصيد الموظف
             if (request.leave_type === "سنوية") {
-                const start = new Date(request.start_date)
-                const end = new Date(request.end_date)
-                const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-
-                const { data: employee } = await supabase
+                // جلب الرصيد الحالي أولاً
+                const { data: employee, error: empError } = await supabase
                     .from("employees")
-                    .select("used_leave_days")
+                    .select("current_year_leave_days")
                     .eq("id", request.employee_id)
                     .single()
 
-                const currentUsed = employee?.used_leave_days || 0
-                await supabase
+                if (empError) {
+                    console.error("❌ Error fetching employee balance:", empError)
+                } else if (employee) {
+                    const newBalance = (employee.current_year_leave_days) - days
+                    console.log(`📊 Old balance: ${employee.current_year_leave_days}, New balance: ${newBalance}`)
+
+                    const { error: updateError } = await supabase
+                        .from("employees")
+                        .update({ current_year_leave_days: newBalance })
+                        .eq("id", request.employee_id)
+
+                    if (updateError) {
+                        console.error("❌ Error updating leave balance:", updateError)
+                    } else {
+                        console.log("✅ Leave balance updated successfully")
+                    }
+                }
+            } else if (request.leave_type === "عارضة") {
+                // جلب الرصيد الحالي أولاً
+                const { data: employee, error: empError } = await supabase
                     .from("employees")
-                    .update({ used_leave_days: currentUsed + days })
+                    .select("current_year_emergency_days")
                     .eq("id", request.employee_id)
+                    .single()
+
+                if (empError) {
+                    console.error("❌ Error fetching emergency balance:", empError)
+                } else if (employee) {
+                    const newBalance = (employee.current_year_emergency_days) - days
+                    console.log(`📊 Old emergency balance: ${employee.current_year_emergency_days}, New balance: ${newBalance}`)
+
+                    const { error: updateError } = await supabase
+                        .from("employees")
+                        .update({ current_year_emergency_days: newBalance })
+                        .eq("id", request.employee_id)
+
+                    if (updateError) {
+                        console.error("❌ Error updating emergency balance:", updateError)
+                    } else {
+                        console.log("✅ Emergency balance updated successfully")
+                    }
+                }
             }
         }
         else if (user_role === "hr") {
@@ -327,22 +393,39 @@ export async function PATCH(req: NextRequest) {
             if (request.manager_approved) {
                 updateData.status = "تمت الموافقة"
 
+                // تحديث رصيد الموظف
                 if (request.leave_type === "سنوية") {
-                    const start = new Date(request.start_date)
-                    const end = new Date(request.end_date)
-                    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-
-                    const { data: employee } = await supabase
+                    const { data: employee, error: empError } = await supabase
                         .from("employees")
-                        .select("used_leave_days")
+                        .select("current_year_leave_days")
                         .eq("id", request.employee_id)
                         .single()
 
-                    const currentUsed = employee?.used_leave_days || 0
-                    await supabase
+                    if (empError) {
+                        console.error("❌ Error fetching employee balance:", empError)
+                    } else if (employee) {
+                        const newBalance = (employee.current_year_leave_days) - days
+                        await supabase
+                            .from("employees")
+                            .update({ current_year_leave_days: newBalance })
+                            .eq("id", request.employee_id)
+                    }
+                } else if (request.leave_type === "عارضة") {
+                    const { data: employee, error: empError } = await supabase
                         .from("employees")
-                        .update({ used_leave_days: currentUsed + days })
+                        .select("current_year_emergency_days")
                         .eq("id", request.employee_id)
+                        .single()
+
+                    if (empError) {
+                        console.error("❌ Error fetching emergency balance:", empError)
+                    } else if (employee) {
+                        const newBalance = (employee.current_year_emergency_days) - days
+                        await supabase
+                            .from("employees")
+                            .update({ current_year_emergency_days: newBalance })
+                            .eq("id", request.employee_id)
+                    }
                 }
             }
         }
@@ -353,22 +436,39 @@ export async function PATCH(req: NextRequest) {
             if (request.hr_approved) {
                 updateData.status = "تمت الموافقة"
 
+                // تحديث رصيد الموظف
                 if (request.leave_type === "سنوية") {
-                    const start = new Date(request.start_date)
-                    const end = new Date(request.end_date)
-                    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-
-                    const { data: employee } = await supabase
+                    const { data: employee, error: empError } = await supabase
                         .from("employees")
-                        .select("used_leave_days")
+                        .select("current_year_leave_days")
                         .eq("id", request.employee_id)
                         .single()
 
-                    const currentUsed = employee?.used_leave_days || 0
-                    await supabase
+                    if (empError) {
+                        console.error("❌ Error fetching employee balance:", empError)
+                    } else if (employee) {
+                        const newBalance = (employee.current_year_leave_days) - days
+                        await supabase
+                            .from("employees")
+                            .update({ current_year_leave_days: newBalance })
+                            .eq("id", request.employee_id)
+                    }
+                } else if (request.leave_type === "عارضة") {
+                    const { data: employee, error: empError } = await supabase
                         .from("employees")
-                        .update({ used_leave_days: currentUsed + days })
+                        .select("current_year_emergency_days")
                         .eq("id", request.employee_id)
+                        .single()
+
+                    if (empError) {
+                        console.error("❌ Error fetching emergency balance:", empError)
+                    } else if (employee) {
+                        const newBalance = (employee.current_year_emergency_days) - days
+                        await supabase
+                            .from("employees")
+                            .update({ current_year_emergency_days: newBalance })
+                            .eq("id", request.employee_id)
+                    }
                 }
             }
         }
@@ -416,6 +516,7 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ message_ar, message_en })
 
     } catch (error) {
+        console.error("❌ Error in PATCH:", error)
         return NextResponse.json({
             error_ar: "حدث خطأ أثناء تحديث الطلب",
             error_en: "Error updating request"
@@ -468,7 +569,8 @@ export async function DELETE(req: NextRequest) {
             message_en: "Request deleted successfully"
         })
 
-    } catch {
+    } catch (error) {
+        console.error("Error in DELETE:", error)
         return NextResponse.json({
             error_ar: "حدث خطأ أثناء حذف الطلب",
             error_en: "Error deleting request"

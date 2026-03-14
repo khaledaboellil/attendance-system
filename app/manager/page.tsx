@@ -61,6 +61,7 @@ type PermissionRequest = {
     manager_approved: boolean
     status: string
     created_at: string
+    deducted_from_leave?: boolean
 }
 
 type CorrectionRequest = {
@@ -120,7 +121,7 @@ export default function ManagerPage() {
     const [managedDepts, setManagedDepts] = useState<number[]>([])
     const [managedDeptsNames, setManagedDeptsNames] = useState<string>("")
     const [departments, setDepartments] = useState<Department[]>([])
-
+    const [yearsOfService, setYearsOfService] = useState(0)
     // ==================== Tabs ====================
     const [activeTab, setActiveTab] = useState<"requests" | "attendance" | "leave" | "overtime" | "permission" | "correction" | "settings">("requests")
 
@@ -139,13 +140,12 @@ export default function ManagerPage() {
     const [leaveEnd, setLeaveEnd] = useState("")
     const [leaveReason, setLeaveReason] = useState("")
     const [leaveBalance, setLeaveBalance] = useState({
-        total: 0,
-        used: 0,
-        remaining: 0,
-        emergency_total: 7,
-        emergency_used: 0,
-        emergency_remaining: 7,
-        yearsOfService: 0,
+        annual_total: 0,
+        emergency_total: 0,
+        used_annual: 0,
+        used_emergency: 0,
+        remaining_annual: 0,
+        remaining_emergency: 0,
         hire_date: "",
         message_ar: "",
         message_en: ""
@@ -180,12 +180,41 @@ export default function ManagerPage() {
     const [attendanceFrom, setAttendanceFrom] = useState("")
     const [attendanceTo, setAttendanceTo] = useState("")
 
+    // ==================== Permission Stats ====================
+    const [permissionStats, setPermissionStats] = useState({
+        totalHoursThisMonth: 0,
+        maxHoursPerMonth: 2,
+        halfDayCount: 0,
+        halfDayFreeUsed: false
+    })
+
     // ==================== Settings ====================
     const [currentPassword, setCurrentPassword] = useState("")
     const [newPassword, setNewPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
     const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
     const [changingPassword, setChangingPassword] = useState(false)
+
+    // =============================================
+    // Fetch Permission Stats
+    // =============================================
+    const fetchPermissionStats = async (empId: string) => {
+        if (!empId) return
+        try {
+            const res = await fetch(`/api/permission-stats?employee_id=${empId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setPermissionStats({
+                    totalHoursThisMonth: data.totalHoursThisMonth || 0,
+                    maxHoursPerMonth: data.maxHoursPerMonth || 2,
+                    halfDayCount: data.halfDayCount || 0,
+                    halfDayFreeUsed: data.halfDayFreeUsed || false
+                })
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
 
     // =============================================
     // useEffect for loading data
@@ -215,6 +244,7 @@ export default function ManagerPage() {
         fetchPermissionRequests(storedId)
         fetchCorrectionRequests(storedId)
         fetchTodayAttendance(storedUsername || "")
+        fetchPermissionStats(storedId)
 
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -307,15 +337,7 @@ export default function ManagerPage() {
         }
     }
 
-    const fetchLeaveRequests = async (empId: string) => {
-        try {
-            const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
-            if (res.ok) {
-                const data = await res.json()
-                setLeaveRequests(data)
-            }
-        } catch (err) { console.error(err) }
-    }
+    
 
     const fetchOvertimeRequests = async (empId: string) => {
         try {
@@ -347,26 +369,46 @@ export default function ManagerPage() {
         } catch (err) { console.error(err) }
     }
 
+    const fetchLeaveRequests = async (empId: string) => {
+        try {
+            const res = await fetch(`/api/leave-requests?employee_id=${empId}`)
+            if (res.ok) {
+                const data = await res.json()
+                setLeaveRequests(data)
+            }
+        } catch (err) { console.error(err) }
+    }
+
     const fetchLeaveBalance = async (empId: string) => {
         try {
             const res = await fetch(`/api/leave-calculator?employee_id=${empId}`)
             const data = await res.json()
             if (res.ok) {
                 setLeaveBalance({
-                    total: data.annual_leave_total || 0,
-                    used: data.used_days || 0,
-                    remaining: data.remaining_annual || 0,
-                    emergency_total: data.emergency_leave_total || 7,
-                    emergency_used: data.used_emergency_days || 0,
-                    emergency_remaining: data.remaining_emergency || 7,
-                    yearsOfService: data.years_of_service || 0,
+                    annual_total: data.annual_total,
+                    emergency_total: data.emergency_total,
+                    used_annual: data.used_annual,
+                    used_emergency: data.used_emergency,
+                    remaining_annual: data.remaining_annual,
+                    remaining_emergency: data.remaining_emergency,
                     hire_date: data.hire_date || "",
                     message_ar: data.message_ar || "",
                     message_en: data.message_en || ""
                 })
-                setHireDate(data.hire_date || "")
+                setHireDate(data.hire_date)
+                const hire = new Date(data.hire_date)
+                const today = new Date()
+
+                const diffMs = today - hire
+                const years = diffMs / (1000 * 60 * 60 * 24 * 365)
+                setYearsOfService(years.toFixed(2) || 0)
+                console.log("✅ Leave balance fetched:", data)
+            } else {
+                console.error("❌ Error fetching leave balance:", data)
             }
-        } catch (err) { console.error(err) }
+        } catch (err) {
+            console.error("❌ Exception in fetchLeaveBalance:", err)
+        }
     }
 
     const fetchTodayAttendance = async (username: string) => {
@@ -560,29 +602,56 @@ export default function ManagerPage() {
             return
         }
 
-        const res = await fetch("/api/permission-requests", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                employee_id: managerId,
-                permission_type: permissionType,
-                date: permissionDate,
-                start_time: permissionStartTime || null,
-                end_time: permissionEndTime || null,
-                reason: permissionReason
-            })
-        })
+        setLoading(true)
 
-        const data = await res.json()
-        showMessage(data, res.ok)
-        if (res.ok) {
-            setShowPermissionForm(false)
-            setPermissionType("ساعة")
-            setPermissionDate("")
-            setPermissionStartTime("")
-            setPermissionEndTime("")
-            setPermissionReason("")
-            fetchPermissionRequests(managerId)
+        try {
+            const res = await fetch("/api/permission-requests", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employee_id: managerId,
+                    permission_type: permissionType,
+                    date: permissionDate,
+                    start_time: permissionStartTime || null,
+                    end_time: permissionEndTime || null,
+                    reason: permissionReason
+                })
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                let successMessage = ""
+                if (permissionType === "نص يوم") {
+                    if (data.message_ar?.includes('خصم')) {
+                        successMessage = language === 'ar' ? data.message_ar : data.message_en
+                    } else {
+                        successMessage = language === 'ar' ? data.message_ar : data.message_en
+                    }
+                } else {
+                    successMessage = language === 'ar' ? data.message_ar : data.message_en
+                }
+
+                alert(successMessage || (language === 'ar' ? 'تم تقديم الطلب بنجاح' : 'Request submitted successfully'))
+
+                setShowPermissionForm(false)
+                setPermissionType("ساعة")
+                setPermissionDate("")
+                setPermissionStartTime("")
+                setPermissionEndTime("")
+                setPermissionReason("")
+                fetchPermissionRequests(managerId)
+                fetchLeaveBalance(managerId)
+                fetchPermissionStats(managerId)
+            } else {
+                const errorMessage = language === 'ar' ? data.error_ar : data.error_en
+                alert(errorMessage || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'))
+            }
+        } catch (err) {
+            console.error(err)
+            alert(t('error_occurred'))
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -595,7 +664,10 @@ export default function ManagerPage() {
             })
             const data = await res.json()
             showMessage(data, res.ok)
-            if (res.ok) fetchPermissionRequests(managerId)
+            if (res.ok) {
+                fetchPermissionRequests(managerId)
+                fetchPermissionStats(managerId)
+            }
         } catch (err) { console.error(err) }
     }
 
@@ -822,7 +894,7 @@ export default function ManagerPage() {
                                 </span>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>⏳</span>
-                                    {t('years_of_service')}: {leaveBalance.yearsOfService} {t('years')}
+                                    {t('years_of_service')}: {yearsOfService} {t('years')}
                                 </span>
                                 <span style={styles.profileDetail}>
                                     <span style={styles.detailIcon}>👥</span>
@@ -1018,6 +1090,7 @@ export default function ManagerPage() {
                                                 details = `${req.date} - ${req.permission_type}`
                                                 if (req.start_time) details += ` ${t('from')} ${req.start_time}`
                                                 if (req.end_time) details += ` ${t('to')} ${req.end_time}`
+                                                if (req.deducted_from_leave) details += ` (${t('deducted_from_leave') || 'خصم من الإجازات'})`
                                             } else if (req.requestType === "correction") {
                                                 details = `${req.date}`
                                                 if (req.expected_check_in) details += ` - ${t('check_in')}: ${req.expected_check_in}`
@@ -1234,151 +1307,109 @@ export default function ManagerPage() {
                             </button>
                         </div>
 
-                        {/* Leave Balance Card */}
                         <div style={styles.balanceCard}>
                             <h4 style={styles.balanceTitle}>{t('leave_balance')}</h4>
+
+                            {/* رسالة الرصيد (اختياري) */}
                             {leaveBalance.message_ar && (
                                 <p style={styles.balanceMessage}>
                                     {language === 'ar' ? leaveBalance.message_ar : leaveBalance.message_en}
                                 </p>
                             )}
 
+                            {/* عرض الرصيد مباشرة من قاعدة البيانات - بدون أي حسابات */}
                             <div style={styles.balanceRow}>
                                 <div style={styles.balanceItem}>
-                                    <span style={styles.balanceLabel}>{t('annual_total')}</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.remaining} / {leaveBalance.total}</span>
+                                    <span style={styles.balanceLabel}>{t('annual_leave')}</span>
+                                    <span style={styles.balanceValue}>
+                                        {leaveBalance.annual_total} {t('days')}
+                                    </span>
                                 </div>
                                 <div style={styles.balanceItem}>
                                     <span style={styles.balanceLabel}>{t('emergency_leave')}</span>
-                                    <span style={styles.balanceValue}>{leaveBalance.emergency_remaining} / {leaveBalance.emergency_total}</span>
+                                    <span style={styles.balanceValue}>
+                                        {leaveBalance.emergency_total} {t('days')}
+                                    </span>
                                 </div>
                             </div>
-                            <div style={styles.progressBar}>
-                                <div style={{ ...styles.progressFill, width: `${(leaveBalance.used / leaveBalance.total) * 100}%` }} />
-                            </div>
+
+
                         </div>
 
-                        {/* New Leave Request Form */}
+                        {/* نموذج طلب إجازة جديد */}
                         {showLeaveForm && (
                             <div style={styles.formCard}>
                                 <h4 style={styles.formTitle}>{t('new_leave_request')}</h4>
-
                                 <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={styles.select}>
                                     <option value="سنوية">{t('annual_leave')}</option>
                                     <option value="مرضية">{t('sick_leave')}</option>
                                     <option value="عارضة">{t('emergency_leave')}</option>
                                     <option value="غير مدفوعة">{t('unpaid_leave')}</option>
                                 </select>
-
                                 <div style={styles.dateRow}>
+                                    {/* تاريخ البداية */}
                                     <div style={styles.dateField}>
                                         <label style={styles.label}>{t('from')}:</label>
-                                        <input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} style={styles.dateInput} />
+                                        <input
+                                            type="date"
+                                            value={leaveStart}
+                                            onChange={e => {
+                                                setLeaveStart(e.target.value)
+
+                                            }}
+                                            style={styles.dateInput}
+                                        />
                                     </div>
+                                    {/* تاريخ النهاية */}
                                     <div style={styles.dateField}>
                                         <label style={styles.label}>{t('to')}:</label>
-                                        <input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} style={styles.dateInput} />
+                                        <input
+                                            type="date"
+                                            value={leaveEnd}
+                                            onChange={e => setLeaveEnd(e.target.value)}
+                                            style={styles.dateInput}
+                                            min={leaveStart || new Date().toISOString().split('T')[0]} // ✅ مش أقل من تاريخ البداية
+                                        />
                                     </div>
                                 </div>
-
-                                <textarea
-                                    placeholder={t('reason_optional')}
-                                    value={leaveReason}
-                                    onChange={e => setLeaveReason(e.target.value)}
-                                    style={styles.textarea}
-                                    rows={3}
-                                />
-
-                                <button onClick={submitLeaveRequest} style={styles.submitButton}>
-                                    ✅ {t('submit_request')}
-                                </button>
+                                <textarea placeholder={t('reason_optional')} value={leaveReason} onChange={e => setLeaveReason(e.target.value)} style={styles.textarea} rows={3} />
+                                <button onClick={submitLeaveRequest} style={styles.submitButton}>✅ {t('submit_request')}</button>
                             </div>
                         )}
 
-                        {/* Previous Leave Requests */}
+                        {/* الطلبات السابقة */}
                         <h4 style={styles.subTitle}>{t('previous_requests')}</h4>
                         <div style={styles.requestsList}>
-                            {leaveRequests.length === 0 && !showLeaveForm && (
-                                <p style={styles.noData}>{t('no_requests')}</p>
-                            )}
-                            {leaveRequests.map(req => {
-                                const status = getApprovalStatus(req)
-                                return (
-                                    <div key={req.id} style={styles.requestCard}>
-                                        <div style={styles.requestHeader}>
-                                            <span style={styles.requestType}>{req.leave_type}</span>
-                                            {req.status === "مرفوضة" ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#ffebee',
-                                                    color: '#f44336',
-                                                    border: '1px solid #f44336'
-                                                }}>
-                                                    ❌ {t('rejected')}
-                                                </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
-                                                <span style={{
-                                                    ...styles.approvalBadge,
-                                                    backgroundColor: '#e8f5e9',
-                                                    color: '#2e7d32',
-                                                    border: '1px solid #4caf50'
-                                                }}>
-                                                    ✅ {t('approved')}
-                                                </span>
-                                            ) : (
-                                                <div style={styles.approvalContainer}>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
-                                                        <span style={styles.approvalLabel}>HR</span>
-                                                        <span style={{
-                                                            color: req.hr_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
-                                                            {req.hr_approved ? '✅' : '⏳'}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{
-                                                        ...styles.approvalRow,
-                                                        backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5',
-                                                        border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}`
-                                                    }}>
-                                                        <span style={styles.approvalLabel}>{t('manager')}</span>
-                                                        <span style={{
-                                                            color: req.manager_approved ? '#2e7d32' : '#ed6c02',
-                                                            fontWeight: 'bold'
-                                                        }}>
-                                                            {req.manager_approved ? '✅' : '⏳'}
-                                                        </span>
-                                                    </div>
+                            {leaveRequests.length === 0 && !showLeaveForm && <p style={styles.noData}>{t('no_requests')}</p>}
+                            {leaveRequests.map(req => (
+                                <div key={req.id} style={styles.requestCard}>
+                                    <div style={styles.requestHeader}>
+                                        <span style={styles.requestType}>{req.leave_type}</span>
+                                        {req.status === "مرفوضة" ? (
+                                            <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>❌ {t('rejected')}</span>
+                                        ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>✅ {t('approved')}</span>
+                                        ) : (
+                                            <div style={styles.approvalContainer}>
+                                                <div style={{ ...styles.approvalRow, backgroundColor: req.hr_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.hr_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                    <span style={styles.approvalLabel}>HR</span>
+                                                    <span style={{ color: req.hr_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>{req.hr_approved ? '✅' : '⏳'}</span>
                                                 </div>
-                                            )}
-                                        </div>
-
-                                        <p style={styles.requestDates}>
-                                            {t('from')} {formatDate(req.start_date)} {t('to')} {formatDate(req.end_date)}
-                                        </p>
-
-                                        {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
-
-                                        <div style={styles.requestFooter}>
-                                            <span style={styles.requestDate}>
-                                                {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
-                                            </span>
-                                            {req.status === "قيد الانتظار" && !req.manager_approved && (
-                                                <button
-                                                    onClick={() => deleteLeaveRequest(req.id)}
-                                                    style={styles.deleteButton}
-                                                >
-                                                    🗑️ {t('delete')}
-                                                </button>
-                                            )}
-                                        </div>
+                                                <div style={{ ...styles.approvalRow, backgroundColor: req.manager_approved ? '#e8f5e9' : '#fff4e5', border: `1px solid ${req.manager_approved ? '#4caf50' : '#ed6c02'}` }}>
+                                                    <span style={styles.approvalLabel}>{t('manager')}</span>
+                                                    <span style={{ color: req.manager_approved ? '#2e7d32' : '#ed6c02', fontWeight: 'bold' }}>{req.manager_approved ? '✅' : '⏳'}</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )
-                            })}
+                                    <p style={styles.requestDates}>{t('from')} {formatDate(req.start_date)} {t('to')} {formatDate(req.end_date)}</p>
+                                    {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
+                                    <div style={styles.requestFooter}>
+                                        <span style={styles.requestDate}>{t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
+                                        {req.status === "قيد الانتظار" && <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -1529,6 +1560,8 @@ export default function ManagerPage() {
                             </button>
                         </div>
 
+                       
+
                         {showPermissionForm && (
                             <div style={styles.formCard}>
                                 <h4 style={styles.formTitle}>{t('new_permission_request')}</h4>
@@ -1597,8 +1630,8 @@ export default function ManagerPage() {
                                     required
                                 />
 
-                                <button onClick={submitPermissionRequest} style={styles.submitButton}>
-                                    ✅ {t('submit_request')}
+                                <button onClick={submitPermissionRequest} style={styles.submitButton} disabled={loading}>
+                                    {loading ? t('loading') : `✅ ${t('submit_request')}`}
                                 </button>
                             </div>
                         )}
@@ -1631,6 +1664,7 @@ export default function ManagerPage() {
                                                     border: '1px solid #4caf50'
                                                 }}>
                                                     ✅ {t('approved')}
+                                                    {req.deducted_from_leave && ` (${t('deducted_from_leave') || 'خصم من الإجازات'})`}
                                                 </span>
                                             ) : (
                                                 <div style={styles.approvalContainer}>
@@ -1675,6 +1709,12 @@ export default function ManagerPage() {
                                         )}
 
                                         <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>
+
+                                        {req.deducted_from_leave && (
+                                            <p style={{ ...styles.requestReason, color: '#f44336', fontWeight: 'bold' }}>
+                                                ⚠️ {t('deducted_from_leave') || 'تم الخصم من الإجازات'}
+                                            </p>
+                                        )}
 
                                         <div style={styles.requestFooter}>
                                             <span style={styles.requestDate}>
@@ -2317,6 +2357,38 @@ const styles: { [key: string]: React.CSSProperties } = {
         height: '100%',
         background: 'linear-gradient(90deg, #4caf50 0%, #8bc34a 100%)',
         transition: 'width 0.3s ease'
+    },
+    statsCard: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 10,
+        padding: 16,
+        marginBottom: 20,
+        border: '1px solid #e0e0e0',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+    },
+    statsTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1976d2',
+        marginBottom: 12,
+        borderBottom: '1px solid #e0e0e0',
+        paddingBottom: 8
+    },
+    statsRow: {
+        display: 'flex',
+        justifyContent: 'space-around',
+        flexWrap: 'wrap' as 'wrap',
+        gap: 15
+    },
+    statItem: {
+        textAlign: 'center' as 'center',
+        minWidth: 150
+    },
+    statItemLabel: {
+        display: 'block',
+        fontSize: 13,
+        color: '#666',
+        marginBottom: 5
     },
     formCard: {
         backgroundColor: '#ffffff',
