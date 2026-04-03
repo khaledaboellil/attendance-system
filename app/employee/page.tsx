@@ -577,10 +577,10 @@ export default function EmployeePage() {
         if (res.ok) {
             setShowCorrectionForm(false)
             setCorrectionDate("")
-            setCorrectionCheckIn("")
-            setCorrectionCheckOut("")
+            setExpectedCheckIn("")
+            setExpectedCheckOut("")
             setCorrectionReason("")
-            fetchCorrectionRequests(adminId)
+            fetchCorrectionRequests(employeeId)
         }
     }
 
