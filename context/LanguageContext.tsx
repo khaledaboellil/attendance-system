@@ -66,7 +66,7 @@ const translations = {
         'you': 'أنت',
         'none': 'لا يوجد',
         'hours_min': 'ساعات',
-        'date_to_correct': 'تاريخ التصحيح',
+        
         'deducted_from_leave': 'تم الخصم من الإجازات',
         'flexible_location': 'موقع مرن',
         'no_changes_to_save': 'لا توجد تغييرات للحفظ',
