@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
     title: "Attendance-System",
     description: "HR Attendance System",
+    viewport: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes",
 };
 
 export default function RootLayout({

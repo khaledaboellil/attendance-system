@@ -1586,12 +1586,13 @@ export default function EmployeePage() {
 }
 
 // ==================== Styles ====================
+// ==================== Styles for Employee Page (Responsive) ====================
 const styles: { [key: string]: React.CSSProperties } = {
     page: {
         fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
         background: '#f0f2f5',
         minHeight: '100vh',
-        padding: 20,
+        padding: '12px',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'flex-start'
@@ -1599,19 +1600,22 @@ const styles: { [key: string]: React.CSSProperties } = {
     container: {
         background: '#ffffff',
         borderRadius: 16,
-        padding: 24,
-        width: '95%',
-        maxWidth: 1200,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+        padding: '16px',
+        width: '100%',
+        maxWidth: 1400,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        margin: '0 auto'
     },
     header: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20
+        marginBottom: 20,
+        gap: 10,
+        flexWrap: 'wrap'
     },
     title: {
-        fontSize: 24,
+        fontSize: 'clamp(18px, 5vw, 24px)',
         fontWeight: '600',
         color: '#1e293b',
         margin: 0
@@ -1628,39 +1632,40 @@ const styles: { [key: string]: React.CSSProperties } = {
     profileCard: {
         backgroundColor: '#3b82f6',
         borderRadius: 12,
-        padding: 20,
+        padding: '16px',
         marginBottom: 24,
         boxShadow: '0 4px 8px rgba(59, 130, 246, 0.3)'
     },
     profileHeader: {
         display: 'flex',
         alignItems: 'center',
-        gap: 20
+        gap: 16,
+        flexWrap: 'wrap'
     },
     profileAvatar: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: '#ffffff',
         color: '#1e293b',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: 'bold'
     },
     profileInfo: {
         flex: 1
     },
     profileName: {
-        fontSize: 22,
+        fontSize: 'clamp(16px, 4vw, 22px)',
         fontWeight: '600',
         margin: 0,
         marginBottom: 4,
         color: '#ffffff'
     },
     profileJob: {
-        fontSize: 15,
+        fontSize: 14,
         margin: 0,
         marginBottom: 8,
         color: '#1e293b',
@@ -1668,48 +1673,45 @@ const styles: { [key: string]: React.CSSProperties } = {
     },
     profileDetails: {
         display: 'flex',
-        gap: 16,
+        gap: 8,
         flexWrap: 'wrap'
     },
     profileDetail: {
-        fontSize: 13,
+        fontSize: 12,
         display: 'flex',
         alignItems: 'center',
         gap: 4,
         backgroundColor: 'rgba(255,255,255,0.15)',
-        padding: '4px 10px',
+        padding: '2px 8px',
         borderRadius: 16,
         color: '#ffffff'
     },
-    detailIcon: {
-        fontSize: 14,
-        color: '#ffffff'
-    },
+    detailIcon: { fontSize: 12, color: '#ffffff' },
     tabBar: {
         display: 'flex',
-        gap: 8,
+        gap: 6,
         marginBottom: 24,
         flexWrap: 'wrap',
         borderBottom: '1px solid #e2e8f0',
         paddingBottom: 8
     },
     tabButton: {
-        padding: '10px 16px',
+        padding: '6px 12px',
         border: 'none',
         borderRadius: 8,
         cursor: 'pointer',
         fontWeight: '500',
-        fontSize: 14,
+        fontSize: 'clamp(11px, 3vw, 14px)',
         backgroundColor: '#f1f5f9',
         color: '#1e293b',
-        transition: 'all 0.2s'
+        whiteSpace: 'nowrap'
     },
     tabContent: {
         minHeight: 400,
         padding: '8px 0'
     },
     sectionTitle: {
-        fontSize: 18,
+        fontSize: 'clamp(16px, 4vw, 20px)',
         fontWeight: '600',
         color: '#1e293b',
         marginBottom: 16
@@ -1718,10 +1720,12 @@ const styles: { [key: string]: React.CSSProperties } = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16
+        marginBottom: 16,
+        flexWrap: 'wrap',
+        gap: 10
     },
     subTitle: {
-        fontSize: 16,
+        fontSize: 'clamp(14px, 3.5vw, 16px)',
         fontWeight: '500',
         color: '#1e293b',
         marginBottom: 12,
@@ -1741,14 +1745,15 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#1e293b',
         fontWeight: '500',
         textAlign: 'center',
-        fontSize: 14,
+        fontSize: 'clamp(12px, 3vw, 14px)',
         border: '1px solid #bae6fd'
     },
     buttonGroup: {
         display: 'flex',
         gap: 12,
         marginBottom: 24,
-        justifyContent: 'center'
+        justifyContent: 'center',
+        flexWrap: 'wrap'
     },
     checkInButton: {
         padding: '10px 24px',
@@ -1758,8 +1763,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#ffffff',
         fontWeight: '500',
         cursor: 'pointer',
-        fontSize: 14,
-        transition: 'all 0.2s'
+        fontSize: 'clamp(12px, 3vw, 14px)'
     },
     checkOutButton: {
         padding: '10px 24px',
@@ -1769,8 +1773,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#ffffff',
         fontWeight: '500',
         cursor: 'pointer',
-        fontSize: 14,
-        transition: 'all 0.2s'
+        fontSize: 'clamp(12px, 3vw, 14px)'
     },
     filterSection: {
         display: 'flex',
@@ -1790,24 +1793,21 @@ const styles: { [key: string]: React.CSSProperties } = {
         flexWrap: 'wrap'
     },
     select: {
-        width: '100%',
-        padding: '10px 12px',
+        padding: '8px 12px',
         borderRadius: 6,
         border: '1px solid #cbd5e1',
-        fontSize: 14,
-        minWidth: 140,
+        fontSize: 'clamp(12px, 3vw, 14px)',
+        minWidth: 120,
         backgroundColor: '#ffffff',
-        color: '#000000',
-        fontWeight: '400'
+        color: '#1e293b'
     },
     dateInput: {
         padding: '8px 12px',
         borderRadius: 6,
         border: '1px solid #cbd5e1',
-        fontSize: 14,
+        fontSize: 'clamp(12px, 3vw, 14px)',
         backgroundColor: '#ffffff',
-        color: '#000000',
-        fontWeight: '400'
+        color: '#1e293b'
     },
     viewButton: {
         padding: '8px 16px',
@@ -1817,8 +1817,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#ffffff',
         cursor: 'pointer',
         fontWeight: '500',
-        fontSize: 14,
-        transition: 'all 0.2s'
+        fontSize: 'clamp(12px, 3vw, 14px)'
     },
     addButton: {
         padding: '8px 16px',
@@ -1828,36 +1827,39 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#ffffff',
         cursor: 'pointer',
         fontWeight: '500',
-        fontSize: 14,
-        transition: 'all 0.2s'
+        fontSize: 'clamp(12px, 3vw, 14px)'
     },
     tableContainer: {
-        maxHeight: 400,
-        overflowY: 'auto',
+        width: '100%',
+        overflowX: 'auto',
         border: '1px solid #e2e8f0',
         borderRadius: 8,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
     },
     table: {
         width: '100%',
         borderCollapse: 'collapse',
-        fontSize: 14
+        fontSize: 'clamp(11px, 2.5vw, 14px)',
+        minWidth: '600px'
     },
     tableHeader: {
-        padding: 12,
+        padding: '12px 8px',
         backgroundColor: '#f8fafc',
         fontWeight: '600',
         textAlign: 'center',
         color: '#1e293b',
         borderBottom: '2px solid #e2e8f0',
         position: 'sticky',
-        top: 0
+        top: 0,
+        whiteSpace: 'nowrap'
     },
     tableCell: {
-        padding: 10,
+        padding: '10px 8px',
         textAlign: 'center',
         borderBottom: '1px solid #e2e8f0',
-        color: '#1e293b'
+        color: '#1e293b',
+        verticalAlign: 'middle'
     },
     emptyCell: {
         padding: 30,
@@ -1872,14 +1874,14 @@ const styles: { [key: string]: React.CSSProperties } = {
         border: '1px solid #bbf7d0'
     },
     balanceTitle: {
-        fontSize: 18,
+        fontSize: 'clamp(14px, 3.5vw, 18px)',
         fontWeight: '600',
         color: '#1e293b',
         marginBottom: 16,
         textAlign: 'center'
     },
     balanceMessage: {
-        fontSize: 13,
+        fontSize: 'clamp(11px, 2.5vw, 13px)',
         color: '#3b82f6',
         textAlign: 'center',
         marginBottom: 12
@@ -1887,89 +1889,21 @@ const styles: { [key: string]: React.CSSProperties } = {
     balanceRow: {
         display: 'flex',
         justifyContent: 'space-around',
-        marginBottom: 16
+        marginBottom: 16,
+        flexWrap: 'wrap',
+        gap: 16
     },
-    balanceItem: {
-        textAlign: 'center'
-    },
+    balanceItem: { textAlign: 'center' },
     balanceLabel: {
-        fontSize: 13,
+        fontSize: 'clamp(11px, 2.5vw, 13px)',
         color: '#475569',
         display: 'block',
         marginBottom: 4
     },
     balanceValue: {
-        fontSize: 20,
+        fontSize: 'clamp(16px, 4vw, 20px)',
         fontWeight: '600',
         color: '#1e293b'
-    },
-    balanceDivider: {
-        margin: '16px 0',
-        border: 'none',
-        borderTop: '1px dashed #86efac'
-    },
-    emergencyRow: {
-        display: 'flex',
-        flexDirection: 'column' as 'column',
-        gap: 8
-    },
-    emergencyItem: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-    },
-    emergencyLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#b45309'
-    },
-    emergencyValue: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#b45309'
-    },
-    emergencyProgress: {
-        height: 6,
-        backgroundColor: '#fed7aa',
-        borderRadius: 3,
-        overflow: 'hidden'
-    },
-    emergencyProgressBar: {
-        height: '100%',
-        backgroundColor: '#f97316',
-        transition: 'width 0.2s ease'
-    },
-    statsCard: {
-        backgroundColor: '#f8f9fa',
-        borderRadius: 10,
-        padding: 16,
-        marginBottom: 20,
-        border: '1px solid #e0e0e0',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-    },
-    statsTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1976d2',
-        marginBottom: 12,
-        borderBottom: '1px solid #e0e0e0',
-        paddingBottom: 8
-    },
-    statsRow: {
-        display: 'flex',
-        justifyContent: 'space-around',
-        flexWrap: 'wrap' as 'wrap',
-        gap: 15
-    },
-    statItem: {
-        textAlign: 'center' as 'center',
-        minWidth: 150
-    },
-    statItemLabel: {
-        display: 'block',
-        fontSize: 13,
-        color: '#666',
-        marginBottom: 5
     },
     formCard: {
         backgroundColor: '#ffffff',
@@ -1979,7 +1913,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         border: '1px solid #e2e8f0'
     },
     formTitle: {
-        fontSize: 16,
+        fontSize: 'clamp(14px, 3.5vw, 16px)',
         fontWeight: '600',
         color: '#1e293b',
         marginBottom: 16,
@@ -1991,15 +1925,14 @@ const styles: { [key: string]: React.CSSProperties } = {
         marginBottom: 12,
         borderRadius: 6,
         border: '1px solid #cbd5e1',
-        fontSize: 14,
+        fontSize: 'clamp(12px, 3vw, 14px)',
         backgroundColor: '#ffffff',
-        color: '#000000',
-        fontWeight: '400'
+        color: '#1e293b'
     },
     label: {
         color: '#1e293b',
         fontWeight: '600',
-        fontSize: 14,
+        fontSize: 'clamp(12px, 3vw, 14px)',
         marginBottom: 4,
         display: 'block'
     },
@@ -2009,33 +1942,18 @@ const styles: { [key: string]: React.CSSProperties } = {
         marginBottom: 16,
         borderRadius: 6,
         border: '1px solid #cbd5e1',
-        fontSize: 14,
+        fontSize: 'clamp(12px, 3vw, 14px)',
         fontFamily: 'inherit',
         backgroundColor: '#ffffff',
-        color: '#000000',
-        fontWeight: '400',
+        color: '#1e293b',
         outline: 'none',
         resize: 'vertical'
     },
-    dateRow: {
-        display: 'flex',
-        gap: 12,
-        marginBottom: 16
-    },
-    dateField: {
-        flex: 1
-    },
-    timeRow: {
-        display: 'flex',
-        gap: 12,
-        marginBottom: 12
-    },
-    timeField: {
-        flex: 1
-    },
-    hoursField: {
-        marginBottom: 12
-    },
+    dateRow: { display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
+    dateField: { flex: 1, minWidth: 120 },
+    timeRow: { display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' },
+    timeField: { flex: 1, minWidth: 120 },
+    hoursField: { marginBottom: 12 },
     submitButton: {
         width: '100%',
         padding: 12,
@@ -2045,58 +1963,51 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#ffffff',
         fontWeight: '600',
         cursor: 'pointer',
-        fontSize: 14,
-        transition: 'all 0.2s'
+        fontSize: 'clamp(12px, 3vw, 14px)'
     },
-    requestsList: {
-        maxHeight: 400,
-        overflowY: 'auto',
-        color: '#000000'
-    },
+    requestsList: { maxHeight: 500, overflowY: 'auto' },
     requestCard: {
         backgroundColor: '#ffffff',
         borderRadius: 8,
         padding: 16,
         marginBottom: 8,
-        border: '1px solid #e2e8f0',
-        color: '#000000'
+        border: '1px solid #e2e8f0'
     },
     requestHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 8,
-        color: '#000000'
+        flexWrap: 'wrap',
+        gap: 8
     },
     requestType: {
         fontWeight: '600',
-        fontSize: 14,
-        color: '#000000'
-    },
-    statusBadge: {
-        padding: '4px 8px',
-        borderRadius: 4,
-        color: '#ffffff',
-        fontSize: 11,
-        fontWeight: '500'
+        fontSize: 'clamp(12px, 3vw, 14px)',
+        color: '#1e293b'
     },
     requestDates: {
-        fontSize: 13,
-        color: '#000000',
+        fontSize: 'clamp(11px, 2.5vw, 13px)',
+        color: '#475569',
         marginBottom: 4
     },
     requestReason: {
-        fontSize: 12,
-        color: '#000000',
+        fontSize: 'clamp(10px, 2.5vw, 12px)',
+        color: '#64748b',
         marginBottom: 8
     },
     requestFooter: {
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        marginTop: 12,
+        paddingTop: 8,
+        borderTop: '1px dashed #e2e8f0',
+        flexWrap: 'wrap',
+        gap: 8
     },
     requestDate: {
-        fontSize: 11,
+        fontSize: 'clamp(9px, 2vw, 11px)',
         color: '#94a3b8'
     },
     deleteButton: {
@@ -2105,21 +2016,21 @@ const styles: { [key: string]: React.CSSProperties } = {
         borderRadius: 4,
         backgroundColor: '#ef4444',
         color: '#ffffff',
-        fontSize: 12,
+        fontSize: 'clamp(11px, 2.5vw, 12px)',
         cursor: 'pointer'
     },
     noData: {
         textAlign: 'center',
         color: '#94a3b8',
         padding: 40,
-        fontSize: 14
+        fontSize: 'clamp(12px, 3vw, 14px)'
     },
     correctionTimes: {
         backgroundColor: '#f1f5f9',
         padding: 8,
         borderRadius: 4,
         margin: '8px 0',
-        fontSize: 12,
+        fontSize: 'clamp(10px, 2.5vw, 12px)',
         color: '#1e293b'
     },
     settingsCard: {
@@ -2132,18 +2043,16 @@ const styles: { [key: string]: React.CSSProperties } = {
         boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
     },
     settingsTitle: {
-        fontSize: 18,
+        fontSize: 'clamp(16px, 4vw, 18px)',
         fontWeight: '600',
         color: '#1e293b',
         marginBottom: 20,
         textAlign: 'center'
     },
-    inputGroup: {
-        marginBottom: 20
-    },
+    inputGroup: { marginBottom: 20 },
     inputLabel: {
         display: 'block',
-        fontSize: 14,
+        fontSize: 'clamp(12px, 3vw, 14px)',
         fontWeight: '500',
         color: '#334155',
         marginBottom: 6
@@ -2152,7 +2061,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         padding: 12,
         borderRadius: 6,
         marginBottom: 20,
-        fontSize: 14,
+        fontSize: 'clamp(12px, 3vw, 14px)',
         textAlign: 'center'
     },
     saveButton: {
@@ -2163,15 +2072,14 @@ const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: '#3b82f6',
         color: '#fff',
         fontWeight: '600',
-        fontSize: 16,
-        cursor: 'pointer',
-        transition: 'background-color 0.2s'
+        fontSize: 'clamp(12px, 3vw, 16px)',
+        cursor: 'pointer'
     },
     approvalContainer: {
         display: 'flex',
-        flexDirection: 'column' as 'column',
+        flexDirection: 'column',
         gap: 8,
-        minWidth: 180
+        minWidth: 140
     },
     approvalRow: {
         display: 'flex',
@@ -2179,16 +2087,13 @@ const styles: { [key: string]: React.CSSProperties } = {
         alignItems: 'center',
         padding: '6px 12px',
         borderRadius: 6,
-        fontSize: 12
+        fontSize: 'clamp(10px, 2.5vw, 12px)'
     },
-    approvalLabel: {
-        color: '#1e293b',
-        fontWeight: '500'
-    },
+    approvalLabel: { color: '#1e293b', fontWeight: '500' },
     approvalBadge: {
         padding: '4px 8px',
         borderRadius: 16,
-        fontSize: 11,
+        fontSize: 'clamp(9px, 2vw, 11px)',
         fontWeight: 'bold',
         display: 'inline-block'
     },
@@ -2196,7 +2101,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         marginTop: 30,
         textAlign: 'center',
         color: '#64748b',
-        fontSize: 13,
+        fontSize: 'clamp(11px, 2.5vw, 13px)',
         borderTop: '1px solid #e2e8f0',
         paddingTop: 20
     }
