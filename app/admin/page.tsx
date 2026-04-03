@@ -3824,10 +3824,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#1e293b',
         outline: 'none',
         transition: 'all 0.2s',
-        ':focus': {
-            borderColor: '#3b82f6',
-            boxShadow: '0 0 0 2px rgba(59,130,246,0.1)',
-        },
+        
     },
     settingsNote: {
         fontSize: 13,
