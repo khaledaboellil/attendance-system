@@ -1,3 +1,4 @@
+// app/api/attendance/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
@@ -102,7 +103,10 @@ export async function POST(req: NextRequest) {
     try {
         const { username, type, lat, lng } = await req.json()
         if (!username || !type || lat == null || lng == null)
-            return NextResponse.json({ error: "املأ كل البيانات" }, { status: 400 })
+            return NextResponse.json({
+                error_ar: "املأ كل البيانات",
+                error_en: "Please fill all data"
+            }, { status: 400 })
 
         const { data: emp } = await supabase
             .from("employees")
@@ -110,13 +114,16 @@ export async function POST(req: NextRequest) {
             .eq("username", username)
             .single()
 
-        if (!emp) return NextResponse.json({ error: "الموظف غير موجود" }, { status: 404 })
+        if (!emp) return NextResponse.json({
+            error_ar: "الموظف غير موجود",
+            error_en: "Employee not found"
+        }, { status: 404 })
 
         let matchedLocation = null
         let locationText = ""
 
         if (emp.is_location_flexible) {
-            locationText = `📍 مرن - (${lat}, ${lng})`
+            locationText = `📍 ${type === "check_in" ? "مرن - تسجيل حضور" : "مرن - تسجيل انصراف"} - (${lat}, ${lng})`
         } else {
             const { data: allowedLocations } = await supabase
                 .from("locations")
@@ -124,11 +131,17 @@ export async function POST(req: NextRequest) {
                 .in("id", emp.locations)
 
             if (!allowedLocations?.length)
-                return NextResponse.json({ error: "لا توجد أماكن مسموحة" }, { status: 400 })
+                return NextResponse.json({
+                    error_ar: "لا توجد أماكن مسموحة",
+                    error_en: "No allowed locations"
+                }, { status: 400 })
 
             matchedLocation = allowedLocations.find(loc => getDistance(lat, lng, loc.lat, loc.lng) <= 100)
             if (!matchedLocation)
-                return NextResponse.json({ error: "أنت خارج النطاق المسموح به" }, { status: 403 })
+                return NextResponse.json({
+                    error_ar: "أنت خارج النطاق المسموح به",
+                    error_en: "You are outside the allowed area"
+                }, { status: 403 })
 
             locationText = `${matchedLocation.name} - (${lat}, ${lng})`
         }
@@ -143,7 +156,10 @@ export async function POST(req: NextRequest) {
                 .eq("day", today)
                 .single()
 
-            if (existing) return NextResponse.json({ message: "الحضور مسجل مسبقاً" })
+            if (existing) return NextResponse.json({
+                message_ar: "الحضور مسجل مسبقاً",
+                message_en: "Attendance already registered"
+            })
 
             await supabase.from("attendance").insert([{
                 employee_id: emp.id,
@@ -151,7 +167,10 @@ export async function POST(req: NextRequest) {
                 check_in: new Date(),
                 location: locationText
             }])
-            return NextResponse.json({ message: "تم تسجيل الحضور" })
+            return NextResponse.json({
+                message_ar: "تم تسجيل الحضور بنجاح",
+                message_en: "Check-in registered successfully"
+            })
         }
 
         if (type === "check_out") {
@@ -162,18 +181,34 @@ export async function POST(req: NextRequest) {
                 .eq("day", today)
                 .single()
 
-            if (!existing) return NextResponse.json({ error: "لم يتم تسجيل حضور اليوم" })
-            if (existing.check_out) return NextResponse.json({ message: "الانصراف مسجل مسبقاً" })
+            if (!existing) return NextResponse.json({
+                error_ar: "لم يتم تسجيل حضور اليوم",
+                error_en: "No check-in recorded today"
+            }, { status: 400 })
+
+            if (existing.check_out) return NextResponse.json({
+                message_ar: "الانصراف مسجل مسبقاً",
+                message_en: "Check-out already registered"
+            })
 
             await supabase
                 .from("attendance")
                 .update({ check_out: new Date(), location: locationText })
                 .eq("id", existing.id)
-            return NextResponse.json({ message: "تم تسجيل الانصراف" })
+            return NextResponse.json({
+                message_ar: "تم تسجيل الانصراف بنجاح",
+                message_en: "Check-out registered successfully"
+            })
         }
 
-        return NextResponse.json({ error: "نوع غير صحيح" }, { status: 400 })
+        return NextResponse.json({
+            error_ar: "نوع غير صحيح",
+            error_en: "Invalid type"
+        }, { status: 400 })
     } catch {
-        return NextResponse.json({ error: "حدث خطأ" }, { status: 500 })
+        return NextResponse.json({
+            error_ar: "حدث خطأ أثناء تسجيل الحضور",
+            error_en: "Error recording attendance"
+        }, { status: 500 })
     }
 }

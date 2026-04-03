@@ -86,11 +86,11 @@ export async function GET(req: NextRequest) {
 
         if (status) {
             if (status === "pending") {
-                query = query.neq("status", "مرفوضة").neq("status", "تمت الموافقة")
+                query = query.neq("status", "rejected").neq("status", "approved")
             } else if (status === "approved") {
-                query = query.eq("status", "تمت الموافقة")
+                query = query.eq("status", "approved")
             } else if (status === "rejected") {
-                query = query.eq("status", "مرفوضة")
+                query = query.eq("status", "rejected")
             }
         }
 
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const allowedTypes = ['سنوية', 'مرضية', 'عارضة', 'غير مدفوعة'];
+        const allowedTypes = ['annual', 'sick', 'emergency', 'unpaid'];
         if (!allowedTypes.includes(leave_type)) {
             return NextResponse.json({
                 error_ar: "نوع الإجازة غير مسموح به",
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         const end = new Date(end_date)
         const requestedDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-        // جلب بيانات الموظف
+        // Fetch employee data
         const { data: employee, error: empError } = await supabase
             .from("employees")
             .select("current_year_leave_days, current_year_emergency_days")
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
             }, { status: 500 })
         }
 
-        // جلب الطلبات السابقة (معتمدة + معلقة) لنفس السنة
+        // Fetch previous requests for the current year
         const currentYear = new Date().getFullYear()
         const yearStart = `${currentYear}-01-01`
         const yearEnd = `${currentYear}-12-31`
@@ -162,12 +162,11 @@ export async function POST(req: NextRequest) {
             .gte("start_date", yearStart)
             .lte("end_date", yearEnd)
 
-        if (leave_type === "سنوية") {
-            // حساب الإجازات السنوية المستخدمة من الطلبات (معتمدة + معلقة)
+        if (leave_type === "annual") {
+            // Calculate used annual leave from requests (pending + approved)
             let usedAnnual = 0
             allRequests?.forEach(req => {
-                if (req.leave_type === "سنوية" && req.status !== "مرفوضة" && req.status !== "معتمدة")
-                { // معلقة أو معتمدة
+                if (req.leave_type === "annual" && req.status !== "rejected") {
                     const s = new Date(req.start_date)
                     const e = new Date(req.end_date)
                     const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -185,12 +184,11 @@ export async function POST(req: NextRequest) {
                 }, { status: 400 })
             }
         }
-        else if (leave_type === "عارضة") {
-            // حساب الإجازات العارضة المستخدمة من الطلبات (معتمدة + معلقة)
+        else if (leave_type === "emergency") {
+            // Calculate used emergency leave from requests (pending + approved)
             let usedEmergency = 0
             allRequests?.forEach(req => {
-                if (req.leave_type === "عارضة" && req.status !== "مرفوضة" && req.status !== "معتمدة")
-                { // معلقة أو معتمدة
+                if (req.leave_type === "emergency" && req.status !== "rejected") {
                     const s = new Date(req.start_date)
                     const e = new Date(req.end_date)
                     const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -209,12 +207,12 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // التحقق من عدم وجود طلب مكرر في نفس الفترة
+        // Check for duplicate pending request in the same period
         const { data: existing, error: existingError } = await supabase
             .from("leave_requests")
             .select("*")
             .eq("employee_id", employee_id)
-            .eq("status", "قيد الانتظار")
+            .eq("status", "pending")
             .or(`and(start_date.lte.${end_date},end_date.gte.${start_date})`)
 
         if (existing && existing.length > 0) {
@@ -224,7 +222,7 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // إنشاء الطلب الجديد
+        // Create the new request
         const { error } = await supabase
             .from("leave_requests")
             .insert([{
@@ -235,7 +233,7 @@ export async function POST(req: NextRequest) {
                 reason,
                 hr_approved: false,
                 manager_approved: false,
-                status: "قيد الانتظار"
+                status: "pending"
             }])
 
         if (error) {
@@ -290,7 +288,7 @@ export async function PATCH(req: NextRequest) {
             }, { status: 404 })
         }
 
-        if (request.status === "مرفوضة" || request.status === "تمت الموافقة") {
+        if (request.status === "rejected" || request.status === "approved") {
             return NextResponse.json({
                 error_ar: "لا يمكن تعديل طلب منتهي",
                 error_en: "Cannot modify a completed request"
@@ -301,7 +299,7 @@ export async function PATCH(req: NextRequest) {
             const { error } = await supabase
                 .from("leave_requests")
                 .update({
-                    status: "مرفوضة",
+                    status: "rejected",
                     updated_at: new Date()
                 })
                 .eq("id", id)
@@ -319,7 +317,7 @@ export async function PATCH(req: NextRequest) {
             })
         }
 
-        // حساب عدد الأيام
+        // Calculate number of days
         const start = new Date(request.start_date)
         const end = new Date(request.end_date)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -331,11 +329,10 @@ export async function PATCH(req: NextRequest) {
             updateData.hr_approved_by = approved_by
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
-            updateData.status = "تمت الموافقة"
+            updateData.status = "approved"
 
-            // تحديث رصيد الموظف
-            if (request.leave_type === "سنوية") {
-                // جلب الرصيد الحالي أولاً
+            // Update employee balance
+            if (request.leave_type === "annual") {
                 const { data: employee, error: empError } = await supabase
                     .from("employees")
                     .select("current_year_leave_days")
@@ -359,8 +356,7 @@ export async function PATCH(req: NextRequest) {
                         console.log("✅ Leave balance updated successfully")
                     }
                 }
-            } else if (request.leave_type === "عارضة") {
-                // جلب الرصيد الحالي أولاً
+            } else if (request.leave_type === "emergency") {
                 const { data: employee, error: empError } = await supabase
                     .from("employees")
                     .select("current_year_emergency_days")
@@ -391,10 +387,10 @@ export async function PATCH(req: NextRequest) {
             updateData.hr_approved_by = approved_by
 
             if (request.manager_approved) {
-                updateData.status = "تمت الموافقة"
+                updateData.status = "approved"
 
-                // تحديث رصيد الموظف
-                if (request.leave_type === "سنوية") {
+                // Update employee balance
+                if (request.leave_type === "annual") {
                     const { data: employee, error: empError } = await supabase
                         .from("employees")
                         .select("current_year_leave_days")
@@ -410,7 +406,7 @@ export async function PATCH(req: NextRequest) {
                             .update({ current_year_leave_days: newBalance })
                             .eq("id", request.employee_id)
                     }
-                } else if (request.leave_type === "عارضة") {
+                } else if (request.leave_type === "emergency") {
                     const { data: employee, error: empError } = await supabase
                         .from("employees")
                         .select("current_year_emergency_days")
@@ -434,10 +430,10 @@ export async function PATCH(req: NextRequest) {
             updateData.manager_approved_by = approved_by
 
             if (request.hr_approved) {
-                updateData.status = "تمت الموافقة"
+                updateData.status = "approved"
 
-                // تحديث رصيد الموظف
-                if (request.leave_type === "سنوية") {
+                // Update employee balance
+                if (request.leave_type === "annual") {
                     const { data: employee, error: empError } = await supabase
                         .from("employees")
                         .select("current_year_leave_days")
@@ -453,7 +449,7 @@ export async function PATCH(req: NextRequest) {
                             .update({ current_year_leave_days: newBalance })
                             .eq("id", request.employee_id)
                     }
-                } else if (request.leave_type === "عارضة") {
+                } else if (request.leave_type === "emergency") {
                     const { data: employee, error: empError } = await supabase
                         .from("employees")
                         .select("current_year_emergency_days")
@@ -542,7 +538,7 @@ export async function DELETE(req: NextRequest) {
             .select("*")
             .eq("id", id)
             .eq("employee_id", employee_id)
-            .eq("status", "قيد الانتظار")
+            .eq("status", "pending")
             .single()
 
         if (fetchError || !request) {

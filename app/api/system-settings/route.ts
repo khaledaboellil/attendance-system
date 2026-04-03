@@ -15,7 +15,6 @@ export async function GET() {
             .single()
 
         if (error) {
-            // إذا لم يكن هناك إعدادات، ننشئ الإعدادات الافتراضية
             const { data: newData, error: insertError } = await supabase
                 .from("system_settings")
                 .insert([{

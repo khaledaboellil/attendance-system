@@ -77,7 +77,16 @@ export default function AdminPage() {
     const [adminManagedDepts, setAdminManagedDepts] = useState<number[]>([])
 
     // ==================== Tabs ====================
-    const [activeTab, setActiveTab] = useState<"dashboard" | "employees" | "departments" | "allRequests" | "reports" | "attendance" | "bulkUpload" | "settings" | "leave" | "overtime" | "permission" | "correction">("dashboard")
+    const [activeTab, setActiveTab] = useState<"dashboard" | "employees" | "departments" | "allRequests" | "reports" | "attendance" | "bulkUpload" | "settings" | "leave" | "overtime" | "permission" | "correction" | "system">("dashboard")
+    // في admin/page.tsx، مع باقي الـ states
+    const [systemSettings, setSystemSettings] = useState({
+        month_start_day: 16,
+        month_end_day: 15,
+        max_hours_per_month: 2,
+        working_days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']
+    })
+    const [savingSettings, setSavingSettings] = useState(false)
+    const [settingsMessage, setSettingsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
     // ==================== Employees Data ====================
     const [employees, setEmployees] = useState<Employee[]>([])
@@ -353,7 +362,7 @@ export default function AdminPage() {
         fetchOvertimeRequests(storedId)
         fetchPermissionRequests(storedId)
         fetchCorrectionRequests(storedId)
-
+        fetchSystemSettings()
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 pos => {
@@ -374,6 +383,7 @@ export default function AdminPage() {
     // =============================================
     // Fetch Functions
     // =============================================
+
     const fetchAdminManagedDepts = async (managerId: string) => {
         try {
             const res = await fetch(`/api/departments/managers?manager_id=${managerId}`)
@@ -443,11 +453,11 @@ export default function AdminPage() {
 
             let filtered = combined
             if (requestsFilter === "pending") {
-                filtered = combined.filter(r => r.status === "قيد الانتظار" && !(r.hr_approved && r.manager_approved))
+                filtered = combined.filter(r => r.status === "pending" && !(r.hr_approved && r.manager_approved))
             } else if (requestsFilter === "approved") {
-                filtered = combined.filter(r => r.status === "تمت الموافقة")
+                filtered = combined.filter(r => r.status === "approved")
             } else if (requestsFilter === "rejected") {
-                filtered = combined.filter(r => r.status === "مرفوضة")
+                filtered = combined.filter(r => r.status === "rejected")
             }
 
             if (requestsType !== "all") {
@@ -620,6 +630,56 @@ export default function AdminPage() {
             }
         } catch (err) { console.error(err) }
     }
+    // مع باقي fetch functions
+    const fetchSystemSettings = async () => {
+        try {
+            const res = await fetch('/api/system-settings')
+            if (res.ok) {
+                const data = await res.json()
+                setSystemSettings({
+                    month_start_day: data.month_start_day,
+                    month_end_day: data.month_end_day,
+                    max_hours_per_month: data.max_hours_per_month,
+                    working_days: data.working_days || ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']
+                })
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
+    const saveSystemSettings = async () => {
+        setSavingSettings(true)
+        setSettingsMessage(null)
+
+        try {
+            const res = await fetch('/api/system-settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(systemSettings)
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                setSettingsMessage({
+                    type: 'success',
+                    text: language === 'ar' ? 'تم حفظ الإعدادات بنجاح' : 'Settings saved successfully'
+                })
+            } else {
+                setSettingsMessage({
+                    type: 'error',
+                    text: language === 'ar' ? 'حدث خطأ أثناء الحفظ' : 'Error saving settings'
+                })
+            }
+        } catch (err) {
+            setSettingsMessage({
+                type: 'error',
+                text: language === 'ar' ? 'خطأ في الاتصال' : 'Connection error'
+            })
+        } finally {
+            setSavingSettings(false)
+        }
+    }
 
     // =============================================
     // Submit Functions
@@ -631,10 +691,10 @@ export default function AdminPage() {
         const end = new Date(leaveEnd)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-        if (leaveType === "سنوية" && days > leaveBalance.remaining_annual) {
+        if (leaveType === "annual" && days > leaveBalance.remaining_annual) {
             return showMessage({ message: `${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining_annual} ${t('days')}` }, false)
         }
-        if (leaveType === "عارضة" && days > leaveBalance.remaining_emergency) {
+        if (leaveType === "emergency" && days > leaveBalance.remaining_emergency) {
             return showMessage({ message: `${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.remaining_emergency} ${t('days')}` }, false)
         }
 
@@ -688,40 +748,70 @@ export default function AdminPage() {
     }
 
     const submitPermissionRequest = async () => {
-        if (!permissionDate || !permissionReason) return showMessage({ message: t('select_date_and_reason') }, false)
-
-        if ((permissionType === "ساعة" || permissionType === "ساعتين") && !permissionStartTime) {
-            return showMessage({ message: t('select_start_time') }, false)
+        if (!permissionDate || !permissionReason) {
+            alert(t('select_date_and_reason'))
+            return
         }
-        
-        const res = await fetch("/api/permission-requests", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                employee_id: adminId,
-                permission_type: permissionType,
-                date: permissionDate,
-                start_time: permissionStartTime || null,
-                end_time: permissionEndTime || null,
-                reason: permissionReason
-            })
-        })
 
-        const data = await res.json()
-        showMessage(data, res.ok)
-        if (res.ok) {
-            setShowPermissionForm(false)
-            setPermissionType("ساعة")
-            setPermissionDate("")
-            setPermissionStartTime("")
-            setPermissionEndTime("")
-            setPermissionReason("")
-            fetchPermissionRequests(adminId)
+        if ((permissionType === "hour" || permissionType === "two_hours") && !permissionStartTime) {
+            alert(t('select_start_time'))
+            return
+        }
+
+        setLoading(true)
+
+        try {
+            const res = await fetch("/api/permission-requests", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employee_id: adminId,
+                    permission_type: permissionType,
+                    date: permissionDate,
+                    start_time: permissionStartTime || null,
+                    end_time: permissionEndTime || null,
+                    reason: permissionReason
+                })
+            })
+
+            const data = await res.json()
+
+            if (res.ok) {
+                let successMessage = ""
+                if (permissionType === "half_day") {
+                    if (data.message_en?.includes('deduct') || data.message_ar?.includes('خصم')) {
+                        successMessage = language === 'ar' ? data.message_ar : data.message_en
+                    } else {
+                        successMessage = language === 'ar' ? data.message_ar : data.message_en
+                    }
+                } else {
+                    successMessage = language === 'ar' ? data.message_ar : data.message_en
+                }
+
+                alert(successMessage || (language === 'ar' ? 'تم تقديم الطلب بنجاح' : 'Request submitted successfully'))
+
+                setShowPermissionForm(false)
+                setPermissionType("hour")
+                setPermissionDate("")
+                setPermissionStartTime("")
+                setPermissionEndTime("")
+                setPermissionReason("")
+                fetchPermissionRequests(adminId)
+                
+            } else {
+                const errorMessage = language === 'ar' ? data.error_ar : data.error_en
+                alert(errorMessage || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'))
+            }
+        } catch (err) {
+            console.error(err)
+            alert(t('error_occurred'))
+        } finally {
+            setLoading(false)
         }
     }
 
     const submitCorrectionRequest = async () => {
-        if (!correctionDate || !correctionReason) return showMessage({ message: t('select_date_and_reason') }, false)
+        if (!correctionDate) return showMessage({ message: t('select_date_and_reason') }, false)
 
         const res = await fetch("/api/attendance-correction", {
             method: "POST",
@@ -1225,21 +1315,48 @@ export default function AdminPage() {
     // =============================================
     const handleCheck = async (type: "check_in" | "check_out") => {
         if (loadingPos) {
-            showMessage({ message: t('getting_location') }, false);
+            alert(t('getting_location'))
             return
         }
-        if (!currentPos.lat || !currentPos.lng) { showMessage({ message: t('location_not_available') }, false); return }
+        if (!currentPos.lat || !currentPos.lng) {
+            alert(t('location_not_available'))
+            return
+        }
 
         try {
             const res = await fetch("/api/attendance", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: adminUsername, type, lat: currentPos.lat, lng: currentPos.lng })
+                body: JSON.stringify({
+                    username: adminUsername,
+                    type,
+                    lat: currentPos.lat,
+                    lng: currentPos.lng
+                })
             })
             const data = await res.json()
-            showMessage(data, res.ok)
-            fetchTodayAttendance(adminUsername)
-        } catch (err) { console.error(err); showMessage({ message: t('error_occurred') }, false) }
+
+            // عرض الرسالة المناسبة
+            if (res.ok) {
+                if (type === "check_in") {
+                    alert(data.message_ar && data.message_en
+                        ? (language === 'ar' ? data.message_ar : data.message_en)
+                        : t('check_in_registered'))
+                } else {
+                    alert(data.message_ar && data.message_en
+                        ? (language === 'ar' ? data.message_ar : data.message_en)
+                        : t('check_out_registered'))
+                }
+                fetchTodayAttendance(adminUsername)
+            } else {
+                alert(data.error_ar && data.error_en
+                    ? (language === 'ar' ? data.error_ar : data.error_en)
+                    : t('error_occurred'))
+            }
+        } catch (err) {
+            console.error(err)
+            alert(t('error_occurred'))
+        }
     }
 
     // =============================================
@@ -1273,8 +1390,8 @@ export default function AdminPage() {
     }
 
     const getApprovalStatus = (req: any) => {
-        if (req.status === "مرفوضة") return { text: t('rejected'), color: "#f44336" }
-        if (req.status === "تمت الموافقة") return { text: t('approved'), color: "#4caf50" }
+        if (req.status === "rejected") return { text: t('rejected'), color: "#f44336" }
+        if (req.status === "approved") return { text: t('approved'), color: "#4caf50" }
         if (req.hr_approved && req.manager_approved) return { text: t('approved'), color: "#4caf50" }
         if (req.hr_approved || req.manager_approved) return { text: t('one_approval'), color: "#ff9800" }
         return { text: t('pending_approvals'), color: "#9e9e9e" }
@@ -1445,6 +1562,16 @@ export default function AdminPage() {
                         style={{ ...styles.tabButton, backgroundColor: activeTab === "settings" ? '#1976d2' : '#e0e0e0', color: activeTab === "settings" ? 'white' : '#333' }}
                     >
                         ⚙️ {t('settings')}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("system")}
+                        style={{
+                            ...styles.tabButton,
+                            backgroundColor: activeTab === "system" ? '#1976d2' : '#e0e0e0',
+                            color: activeTab === "system" ? 'white' : '#333',
+                        }}
+                    >
+                        ⚙️ {t('system_settings')}
                     </button>
                 </div>
 
@@ -1847,11 +1974,11 @@ export default function AdminPage() {
                                                     </td>
                                                     <td style={styles.tableCell}>{details}</td>
                                                     <td style={styles.tableCell}>
-                                                        {req.status === "مرفوضة" ? (
+                                                        {req.status === "rejected" ? (
                                                             <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
                                                                 ❌ {t('rejected')}
                                                             </span>
-                                                        ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                        ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                             <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
                                                                 ✅ {t('approved')}
                                                             </span>
@@ -1881,7 +2008,7 @@ export default function AdminPage() {
                                                                 </button>
                                                             </>
                                                         )}
-                                                        {req.hr_approved && req.status === "قيد الانتظار" && <span style={styles.approvedBadge}>✅ {t('hr_approved')}</span>}
+                                                        {req.hr_approved && req.status === "pending" && <span style={styles.approvedBadge}>✅ {t('hr_approved')}</span>}
                                                     </td>
                                                 </tr>
                                             )
@@ -2133,10 +2260,10 @@ export default function AdminPage() {
                             <div style={styles.formCard}>
                                 <h4 style={styles.formTitle}>{t('new_leave_request')}</h4>
                                 <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={styles.select}>
-                                    <option value="سنوية">{t('annual_leave')}</option>
-                                    <option value="مرضية">{t('sick_leave')}</option>
-                                    <option value="عارضة">{t('emergency_leave')}</option>
-                                    <option value="غير مدفوعة">{t('unpaid_leave')}</option>
+                                    <option value="annual">{t('annual_leave')}</option>
+                                    <option value="sick">{t('sick_leave')}</option>
+                                    <option value="emergency">{t('emergency_leave')}</option>
+                                    <option value="unpaid">{t('unpaid_leave')}</option>
                                 </select>
                                 <div style={styles.dateRow}>
                                     {/* تاريخ البداية */}
@@ -2178,9 +2305,9 @@ export default function AdminPage() {
                                 <div key={req.id} style={styles.requestCard}>
                                     <div style={styles.requestHeader}>
                                         <span style={styles.requestType}>{req.leave_type}</span>
-                                        {req.status === "مرفوضة" ? (
+                                        {req.status === "rejected" ? (
                                             <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>❌ {t('rejected')}</span>
-                                        ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                        ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                             <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>✅ {t('approved')}</span>
                                         ) : (
                                             <div style={styles.approvalContainer}>
@@ -2199,7 +2326,7 @@ export default function AdminPage() {
                                     {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
                                     <div style={styles.requestFooter}>
                                         <span style={styles.requestDate}>{t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
-                                        {req.status === "قيد الانتظار" && <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>}
+                                        {req.status === "pending" && <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>}
                                     </div>
                                 </div>
                             ))}
@@ -2250,11 +2377,11 @@ export default function AdminPage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{t('overtime')}</span>
-                                            {req.status === "مرفوضة" ? (
+                                            {req.status === "rejected" ? (
                                                 <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
                                                     ❌ {t('rejected')}
                                                 </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
                                                     ✅ {t('approved')}
                                                 </span>
@@ -2284,7 +2411,7 @@ export default function AdminPage() {
                                             <span style={styles.requestDate}>
                                                 {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
-                                            {req.status === "قيد الانتظار" && (
+                                            {req.status === "pending" && (
                                                 <button onClick={() => deleteOvertimeRequest(req.id)} style={styles.deleteButton}>
                                                     🗑️ {t('delete')}
                                                 </button>
@@ -2312,9 +2439,9 @@ export default function AdminPage() {
                                 <h4 style={styles.formTitle}>{t('new_permission_request')}</h4>
 
                                 <select value={permissionType} onChange={e => setPermissionType(e.target.value)} style={styles.select}>
-                                    <option value="ساعة">{t('one_hour')}</option>
-                                    <option value="ساعتين">{t('two_hours')}</option>
-                                    <option value="نص يوم">{t('half_day')}</option>
+                                    <option value="hour">{t('one_hour')}</option>
+                                    <option value="two_hours">{t('two_hours')}</option>
+                                    <option value="half_day">{t('half_day')}</option>
                                 </select>
 
                                 <div style={styles.dateField}>
@@ -2322,14 +2449,14 @@ export default function AdminPage() {
                                     <input type="date" value={permissionDate} onChange={e => setPermissionDate(e.target.value)} style={styles.dateInput} />
                                 </div>
 
-                                {(permissionType === "ساعة" || permissionType === "ساعتين") && (
+                                {(permissionType === "hour" || permissionType === "two_hours") && (
                                     <div style={styles.timeField}>
                                         <label style={styles.label}>{t('start_time')}:</label>
                                         <input type="time" value={permissionStartTime} onChange={e => setPermissionStartTime(e.target.value)} style={styles.input} />
                                     </div>
                                 )}
 
-                                {permissionType === "نص يوم" && (
+                                {permissionType === "half_day" && (
                                     <div style={styles.timeRow}>
                                         <div style={styles.timeField}>
                                             <label style={styles.label}>{t('from')}:</label>
@@ -2361,11 +2488,11 @@ export default function AdminPage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{t('permission')} {req.permission_type}</span>
-                                            {req.status === "مرفوضة" ? (
+                                            {req.status === "rejected" ? (
                                                 <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
                                                     ❌ {t('rejected')}
                                                 </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
                                                     ✅ {t('approved')}
                                                 </span>
@@ -2391,7 +2518,7 @@ export default function AdminPage() {
 
                                         {req.start_time && (
                                             <p style={styles.requestReason}>
-                                                {req.permission_type === "نص يوم"
+                                                {req.permission_type === "half_day"
                                                     ? `${t('from')} ${req.start_time} ${t('to')} ${req.end_time || "?"}`
                                                     : `${t('from')} ${req.start_time}`}
                                             </p>
@@ -2403,7 +2530,7 @@ export default function AdminPage() {
                                             <span style={styles.requestDate}>
                                                 {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
-                                            {req.status === "قيد الانتظار" && (
+                                            {req.status === "pending" && (
                                                 <button onClick={() => deletePermissionRequest(req.id)} style={styles.deleteButton}>
                                                     🗑️ {t('delete')}
                                                 </button>
@@ -2465,11 +2592,11 @@ export default function AdminPage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{t('correction_for')} {req.date}</span>
-                                            {req.status === "مرفوضة" ? (
+                                            {req.status === "rejected" ? (
                                                 <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>
                                                     ❌ {t('rejected')}
                                                 </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>
                                                     ✅ {t('approved')}
                                                 </span>
@@ -2504,7 +2631,7 @@ export default function AdminPage() {
                                             <span style={styles.requestDate}>
                                                 {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
-                                            {req.status === "قيد الانتظار" && (
+                                            {req.status === "pending" && (
                                                 <button onClick={() => deleteCorrectionRequest(req.id)} style={styles.deleteButton}>
                                                     🗑️ {t('delete')}
                                                 </button>
@@ -2546,7 +2673,157 @@ export default function AdminPage() {
                         </div>
                     </div>
                 )}
+                
+                {/* System Settings Tab */}
+                {activeTab === "system" && (
+                    <div style={styles.tabContent}>
+                        <h3 style={styles.sectionTitle}>{t('system_settings')}</h3>
 
+                        <div style={styles.systemSettingsCard}>
+                            {/* إعدادات الشهر */}
+                            <div style={styles.settingsGroup}>
+                                <h4 style={styles.settingsGroupTitle}>{t('month_settings')}</h4>
+                                <div style={styles.settingsRow}>
+                                    <div style={styles.settingsField}>
+                                        <label style={styles.label}>{t('month_start_day')}</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="31"
+                                            value={systemSettings.month_start_day}
+                                            onChange={e => setSystemSettings({
+                                                ...systemSettings,
+                                                month_start_day: parseInt(e.target.value) || 1
+                                            })}
+                                            style={styles.systemInput}
+                                        />
+                                    </div>
+                                    <div style={styles.settingsField}>
+                                        <label style={styles.label}>{t('month_end_day')}</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="31"
+                                            value={systemSettings.month_end_day}
+                                            onChange={e => setSystemSettings({
+                                                ...systemSettings,
+                                                month_end_day: parseInt(e.target.value) || 1
+                                            })}
+                                            style={styles.systemInput}
+                                        />
+                                    </div>
+                                </div>
+                                <p style={styles.settingsNote}>
+                                    {language === 'ar'
+                                        ? `📅 الشهر يبدأ من يوم ${systemSettings.month_start_day} وينتهي في يوم ${systemSettings.month_end_day} من الشهر التالي`
+                                        : `📅 Month starts on day ${systemSettings.month_start_day} and ends on day ${systemSettings.month_end_day} of next month`
+                                    }
+                                </p>
+                            </div>
+
+                            <div style={styles.divider} />
+
+                            {/* إعدادات الإذن */}
+                            <div style={styles.settingsGroup}>
+                                <h4 style={styles.settingsGroupTitle}>{t('permission_settings')}</h4>
+                                <div style={styles.settingsRow}>
+                                    <div style={styles.settingsField}>
+                                        <label style={styles.label}>{t('max_hours_per_month')}</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="100"
+                                            step="0.5"
+                                            value={systemSettings.max_hours_per_month}
+                                            onChange={e => setSystemSettings({
+                                                ...systemSettings,
+                                                max_hours_per_month: parseFloat(e.target.value) || 1
+                                            })}
+                                            style={styles.systemInput}
+                                        />
+                                    </div>
+                                </div>
+                                <p style={styles.settingsNote}>
+                                    {language === 'ar'
+                                        ? `⏰ الحد الأقصى لساعات الإذن في الشهر الواحد: ${systemSettings.max_hours_per_month} ساعة`
+                                        : `⏰ Maximum permission hours per month: ${systemSettings.max_hours_per_month} hours`
+                                    }
+                                </p>
+                            </div>
+
+                            <div style={styles.divider} />
+
+                            {/* أيام العمل */}
+                            <div style={styles.settingsGroup}>
+                                <h4 style={styles.settingsGroupTitle}>{t('working_days')}</h4>
+                                <div style={styles.workingDaysGrid}>
+                                    {[
+                                        { key: 'Sunday', label: t('sunday') },
+                                        { key: 'Monday', label: t('monday') },
+                                        { key: 'Tuesday', label: t('tuesday') },
+                                        { key: 'Wednesday', label: t('wednesday') },
+                                        { key: 'Thursday', label: t('thursday') },
+                                        { key: 'Friday', label: t('friday') },
+                                        { key: 'Saturday', label: t('saturday') }
+                                    ].map(day => (
+                                        <label key={day.key} style={styles.dayCheckbox}>
+                                            <input
+                                                type="checkbox"
+                                                checked={systemSettings.working_days.includes(day.key)}
+                                                onChange={e => {
+                                                    const newWorkingDays = e.target.checked
+                                                        ? [...systemSettings.working_days, day.key]
+                                                        : systemSettings.working_days.filter(d => d !== day.key)
+                                                    setSystemSettings({
+                                                        ...systemSettings,
+                                                        working_days: newWorkingDays
+                                                    })
+                                                }}
+                                                style={styles.checkboxInput}
+                                            />
+                                            <span style={styles.dayLabel}>{day.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {settingsMessage && (
+                                <div style={{
+                                    ...styles.messageBox,
+                                    backgroundColor: settingsMessage.type === 'success' ? '#d1fae5' : '#fee2e2',
+                                    color: settingsMessage.type === 'success' ? '#065f46' : '#991b1b',
+                                    border: `1px solid ${settingsMessage.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+                                    borderRadius: 8,
+                                    padding: 12,
+                                    marginBottom: 20,
+                                    textAlign: 'center'
+                                }}>
+                                    {settingsMessage.text}
+                                </div>
+                            )}
+
+                            <button
+                                onClick={saveSystemSettings}
+                                disabled={savingSettings}
+                                style={{
+                                    ...styles.saveButton,
+                                    backgroundColor: '#3b82f6',
+                                    color: '#ffffff',
+                                    padding: '12px 24px',
+                                    fontSize: 16,
+                                    fontWeight: '600',
+                                    border: 'none',
+                                    borderRadius: 8,
+                                    cursor: savingSettings ? 'not-allowed' : 'pointer',
+                                    opacity: savingSettings ? 0.7 : 1,
+                                    width: '100%'
+                                }}
+                            >
+                                {savingSettings ? t('loading') : `💾 ${t('save_settings')}`}
+                            </button>
+                        </div>
+                    </div>
+                )}
                 {/* Footer */}
                 <div style={styles.footer}>
                     &copy; 2026 Khaled Aboellil. {t('footer')}
@@ -3504,5 +3781,97 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: 'pointer',
         fontWeight: 'bold',
         fontSize: 16,
+    },
+    // أضف هذه الأنماط إلى كائن styles الموجود
+    systemSettingsCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 16,
+        padding: 28,
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+        maxWidth: 700,
+        margin: '0 auto',
+    },
+    settingsGroup: {
+        marginBottom: 28,
+    },
+    settingsGroupTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginBottom: 20,
+        paddingBottom: 8,
+        borderBottom: '2px solid #3b82f6',
+        display: 'inline-block',
+    },
+    settingsRow: {
+        display: 'flex',
+        gap: 24,
+        flexWrap: 'wrap',
+        marginBottom: 16,
+    },
+    settingsField: {
+        flex: 1,
+        minWidth: 180,
+    },
+    systemInput: {
+        width: '100%',
+        padding: '10px 14px',
+        borderRadius: 8,
+        border: '1px solid #cbd5e1',
+        fontSize: 15,
+        backgroundColor: '#ffffff',
+        color: '#1e293b',
+        outline: 'none',
+        transition: 'all 0.2s',
+        ':focus': {
+            borderColor: '#3b82f6',
+            boxShadow: '0 0 0 2px rgba(59,130,246,0.1)',
+        },
+    },
+    settingsNote: {
+        fontSize: 13,
+        color: '#475569',
+        marginTop: 8,
+        fontStyle: 'italic',
+        backgroundColor: '#f8fafc',
+        padding: '8px 12px',
+        borderRadius: 8,
+        display: 'inline-block',
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#e2e8f0',
+        margin: '24px 0',
+        border: 'none',
+    },
+    workingDaysGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+        gap: 12,
+        marginTop: 8,
+    },
+    dayCheckbox: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 14px',
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+        border: '1px solid #e2e8f0',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+    },
+    checkboxInput: {
+        width: 18,
+        height: 18,
+        cursor: 'pointer',
+        accentColor: '#3b82f6',
+    },
+    dayLabel: {
+        fontSize: 14,
+        color: '#1e293b',
+        fontWeight: '500',
+        cursor: 'pointer',
     },
 }

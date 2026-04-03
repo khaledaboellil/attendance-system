@@ -6,7 +6,6 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// GET: جلب كل الموظفين
 export async function GET() {
     try {
         const { data, error } = await supabase
@@ -15,18 +14,17 @@ export async function GET() {
             .order("name", { ascending: true })
 
         if (error) {
-            console.error("خطأ في جلب الموظفين:", error)
+            console.error("Error fetching employees:", error)
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
         return NextResponse.json(data || [])
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء جلب الموظفين" }, { status: 500 })
+        console.error("Unexpected error:", error)
+        return NextResponse.json({ error: "Error fetching employees" }, { status: 500 })
     }
 }
 
-// POST: إضافة موظف جديد
 export async function POST(req: NextRequest) {
     try {
         const {
@@ -43,10 +41,9 @@ export async function POST(req: NextRequest) {
         } = await req.json()
 
         if (!name || !username || !password || !role) {
-            return NextResponse.json({ error: "املأ كل البيانات المطلوبة" }, { status: 400 })
+            return NextResponse.json({ error: "All required fields must be filled" }, { status: 400 })
         }
 
-        // التحقق من وجود المستخدم مسبقاً
         const { data: existing, error: checkError } = await supabase
             .from("employees")
             .select("id")
@@ -54,15 +51,14 @@ export async function POST(req: NextRequest) {
             .maybeSingle()
 
         if (checkError) {
-            console.error("خطأ في التحقق من وجود المستخدم:", checkError)
+            console.error("Error checking existing user:", checkError)
             return NextResponse.json({ error: checkError.message }, { status: 500 })
         }
 
         if (existing) {
-            return NextResponse.json({ error: "المستخدم موجود مسبقاً" }, { status: 400 })
+            return NextResponse.json({ error: "User already exists" }, { status: 400 })
         }
 
-        // الأماكن الافتراضية للموظف الجديد
         const defaultLocations = [
             "a89a4bbf-83db-403b-b66d-4cb40250bd3d",
             "e2b17a94-a54e-4cb1-905d-9f13d2df3e20",
@@ -89,21 +85,20 @@ export async function POST(req: NextRequest) {
             .single()
 
         if (error) {
-            console.error("خطأ في إضافة الموظف:", error)
+            console.error("Error adding employee:", error)
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
         return NextResponse.json({
-            message: "تم إضافة الموظف بنجاح",
+            message: "Employee added successfully",
             employee: data
         })
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء إضافة الموظف" }, { status: 500 })
+        console.error("Unexpected error:", error)
+        return NextResponse.json({ error: "Error adding employee" }, { status: 500 })
     }
 }
 
-// PUT: تحديث بيانات موظف كاملة
 export async function PUT(req: NextRequest) {
     try {
         const {
@@ -120,10 +115,9 @@ export async function PUT(req: NextRequest) {
         } = await req.json()
 
         if (!id || !name || !username || !role) {
-            return NextResponse.json({ error: "املأ كل البيانات المطلوبة" }, { status: 400 })
+            return NextResponse.json({ error: "All required fields must be filled" }, { status: 400 })
         }
 
-        // التحقق من عدم وجود مستخدم آخر بنفس الاسم
         const { data: existing, error: checkError } = await supabase
             .from("employees")
             .select("id")
@@ -132,12 +126,12 @@ export async function PUT(req: NextRequest) {
             .maybeSingle()
 
         if (checkError) {
-            console.error("خطأ في التحقق من وجود المستخدم:", checkError)
+            console.error("Error checking existing user:", checkError)
             return NextResponse.json({ error: checkError.message }, { status: 500 })
         }
 
         if (existing) {
-            return NextResponse.json({ error: "اسم المستخدم مستخدم من قبل" }, { status: 400 })
+            return NextResponse.json({ error: "Username already taken" }, { status: 400 })
         }
 
         const { data, error } = await supabase
@@ -158,31 +152,29 @@ export async function PUT(req: NextRequest) {
             .single()
 
         if (error) {
-            console.error("خطأ في تحديث الموظف:", error)
+            console.error("Error updating employee:", error)
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
         return NextResponse.json({
-            message: "تم تعديل الموظف بنجاح",
+            message: "Employee updated successfully",
             employee: data
         })
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء تعديل الموظف" }, { status: 500 })
+        console.error("Unexpected error:", error)
+        return NextResponse.json({ error: "Error updating employee" }, { status: 500 })
     }
 }
 
-// PATCH: تحديث جزئي لبيانات الموظف
 export async function PATCH(req: NextRequest) {
     try {
         const updates = await req.json()
         const { id, ...fields } = updates
 
         if (!id) {
-            return NextResponse.json({ error: "الرقم التعريفي مطلوب" }, { status: 400 })
+            return NextResponse.json({ error: "ID is required" }, { status: 400 })
         }
 
-        // إذا كان في تحديث لاسم المستخدم، نتحقق من عدم التكرار
         if (fields.username) {
             const { data: existing, error: checkError } = await supabase
                 .from("employees")
@@ -192,12 +184,12 @@ export async function PATCH(req: NextRequest) {
                 .maybeSingle()
 
             if (checkError) {
-                console.error("خطأ في التحقق من وجود المستخدم:", checkError)
+                console.error("Error checking existing user:", checkError)
                 return NextResponse.json({ error: checkError.message }, { status: 500 })
             }
 
             if (existing) {
-                return NextResponse.json({ error: "اسم المستخدم مستخدم من قبل" }, { status: 400 })
+                return NextResponse.json({ error: "Username already taken" }, { status: 400 })
             }
         }
 
@@ -209,105 +201,104 @@ export async function PATCH(req: NextRequest) {
             .single()
 
         if (error) {
-            console.error("خطأ في تحديث الموظف:", error)
+            console.error("Error updating employee:", error)
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
         return NextResponse.json({
-            message: "تم تحديث الموظف بنجاح",
+            message: "Employee updated successfully",
             employee: data
         })
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء تحديث الموظف" }, { status: 500 })
+        console.error("Unexpected error:", error)
+        return NextResponse.json({ error: "Error updating employee" }, { status: 500 })
     }
 }
 
-// DELETE: حذف موظف (مع كل بياناته المرتبطة)
 export async function DELETE(req: NextRequest) {
     try {
         const { id } = await req.json()
 
         if (!id) {
-            return NextResponse.json({ error: "الرقم التعريفي مطلوب" }, { status: 400 })
+            return NextResponse.json({ error: "ID is required" }, { status: 400 })
         }
 
-        // 1. حذف سجلات الحضور
+        // Delete attendance records
         const { error: attendanceError } = await supabase
             .from("attendance")
             .delete()
             .eq("employee_id", id)
 
         if (attendanceError) {
-            console.error("خطأ في حذف سجلات الحضور:", attendanceError)
+            console.error("Error deleting attendance:", attendanceError)
         }
 
-        // 2. حذف طلبات الإجازات
+        // Delete leave requests
         const { error: leaveError } = await supabase
             .from("leave_requests")
             .delete()
             .eq("employee_id", id)
 
         if (leaveError) {
-            console.error("خطأ في حذف طلبات الإجازات:", leaveError)
+            console.error("Error deleting leave requests:", leaveError)
         }
 
-        // 3. حذف طلبات الأوفر تايم
+        // Delete overtime requests
         const { error: overtimeError } = await supabase
             .from("overtime_requests")
             .delete()
             .eq("employee_id", id)
 
         if (overtimeError) {
-            console.error("خطأ في حذف طلبات الأوفر تايم:", overtimeError)
+            console.error("Error deleting overtime requests:", overtimeError)
         }
 
-        // 4. حذف طلبات الإذن
+        // Delete permission requests
         const { error: permissionError } = await supabase
             .from("permission_requests")
             .delete()
             .eq("employee_id", id)
 
         if (permissionError) {
-            console.error("خطأ في حذف طلبات الإذن:", permissionError)
+            console.error("Error deleting permission requests:", permissionError)
         }
 
-        // 5. حذف طلبات تصحيح البصمة
+        // Delete correction requests
         const { error: correctionError } = await supabase
             .from("attendance_correction_requests")
             .delete()
             .eq("employee_id", id)
 
         if (correctionError) {
-            console.error("خطأ في حذف طلبات التصحيح:", correctionError)
+            console.error("Error deleting correction requests:", correctionError)
         }
 
-        // 6. حذف علاقات المدراء (لو كان مدير)
+        // Delete manager relationships
         const { error: managerError } = await supabase
             .from("manager_departments")
             .delete()
             .eq("manager_id", id)
 
         if (managerError) {
-            console.error("خطأ في حذف علاقات المدراء:", managerError)
+            console.error("Error deleting manager relationships:", managerError)
         }
 
-        // 7. أخيراً حذف الموظف نفسه
+        // Delete the employee
         const { error } = await supabase
             .from("employees")
             .delete()
             .eq("id", id)
 
         if (error) {
-            console.error("خطأ في حذف الموظف:", error)
+            console.error("Error deleting employee:", error)
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
         return NextResponse.json({
-            message: "✅ تم حذف الموظف وكل بياناته بنجاح"
+            message: "Employee and all related data deleted successfully"
         })
     } catch (error) {
-        console.error("خطأ غير متوقع:", error)
-        return NextResponse.json({ error: "حدث خطأ أثناء حذف الموظف" }, { status: 500 })
+        console.error("Unexpected error:", error)
+        return NextResponse.json({ error: "Error deleting employee" }, { status: 500 })
     }
 }

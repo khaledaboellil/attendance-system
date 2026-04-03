@@ -6,9 +6,9 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// دالة لحساب بداية ونهاية الشهر حسب إعدادات الإدارة
+// Function to calculate month range based on system settings
 async function getMonthRange(referenceDate: Date) {
-    // جلب إعدادات الشهر من قاعدة البيانات
+    // Fetch system settings from database
     const { data: settings } = await supabase
         .from("system_settings")
         .select("month_start_day, month_end_day")
@@ -25,20 +25,13 @@ async function getMonthRange(referenceDate: Date) {
     let startDate: Date, endDate: Date
 
     if (currentDay >= startDay) {
-        // مثال: النهاردة 20 مارس 2026
-        // بداية الشهر: 16 مارس 2026
-        // نهاية الشهر: 15 أبريل 2026
         startDate = new Date(year, month, startDay)
         endDate = new Date(year, month + 1, endDay)
     } else {
-        // مثال: النهاردة 10 مارس 2026
-        // بداية الشهر: 16 فبراير 2026
-        // نهاية الشهر: 15 مارس 2026
         startDate = new Date(year, month - 1, startDay)
         endDate = new Date(year, month, endDay)
     }
 
-    // تأكد من أن التواريخ صحيحة
     const startStr = startDate.toISOString().split('T')[0]
     const endStr = endDate.toISOString().split('T')[0]
 
@@ -133,11 +126,11 @@ export async function GET(req: NextRequest) {
 
         if (status) {
             if (status === "pending") {
-                query = query.neq("status", "مرفوضة").neq("status", "تمت الموافقة")
+                query = query.neq("status", "rejected").neq("status", "approved")
             } else if (status === "approved") {
-                query = query.eq("status", "تمت الموافقة")
+                query = query.eq("status", "approved")
             } else if (status === "rejected") {
-                query = query.eq("status", "مرفوضة")
+                query = query.eq("status", "rejected")
             }
         }
 
@@ -171,7 +164,7 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        if (!['ساعة', 'ساعتين', 'نص يوم'].includes(permission_type)) {
+        if (!['hour', 'two_hours', 'half_day'].includes(permission_type)) {
             return NextResponse.json({
                 error_ar: "نوع الإذن غير صحيح",
                 error_en: "Invalid permission type"
@@ -181,9 +174,9 @@ export async function POST(req: NextRequest) {
         const requestDate = new Date(date)
         const monthRange = await getMonthRange(requestDate)
 
-        // التحقق من مجموع الساعات في الشهر (للإذن بالساعة أو ساعتين)
-        if (permission_type === "ساعة" || permission_type === "ساعتين") {
-            // جلب إعدادات الحد الأقصى للساعات
+        // Check monthly hour limit for hour or two_hours permissions
+        if (permission_type === "hour" || permission_type === "two_hours") {
+            // Fetch max hours per month setting
             const { data: settings } = await supabase
                 .from("system_settings")
                 .select("max_hours_per_month")
@@ -192,12 +185,12 @@ export async function POST(req: NextRequest) {
 
             const maxHoursPerMonth = settings?.max_hours_per_month || 2
 
-            // ✅ جلب الطلبات المعتمدة وقيد الانتظار في الشهر الحالي
+            // Fetch existing requests in current month
             const { data: existingRequests, error: fetchError } = await supabase
                 .from("permission_requests")
                 .select("permission_type, deducted_from_leave")
                 .eq("employee_id", employee_id)
-                .in("status", ["تمت الموافقة", "قيد الانتظار"])
+                .in("status", ["approved", "pending"])
                 .gte("date", monthRange.start)
                 .lte("date", monthRange.end)
 
@@ -211,14 +204,14 @@ export async function POST(req: NextRequest) {
                 }, { status: 500 })
             }
 
-            // حساب مجموع الساعات المستخدمة في الشهر
+            // Calculate total hours used in month
             let totalHoursInMonth = 0
             existingRequests?.forEach(req => {
-                if (req.permission_type === "ساعة") totalHoursInMonth += 1
-                else if (req.permission_type === "ساعتين") totalHoursInMonth += 2
+                if (req.permission_type === "hour") totalHoursInMonth += 1
+                else if (req.permission_type === "two_hours") totalHoursInMonth += 2
             })
 
-            const requestedHours = permission_type === "ساعة" ? 1 : 2
+            const requestedHours = permission_type === "hour" ? 1 : 2
 
             if (totalHoursInMonth + requestedHours > maxHoursPerMonth) {
                 const remainingHours = maxHoursPerMonth - totalHoursInMonth
@@ -229,18 +222,18 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // التحقق من الإذن بنص يوم (مرة واحدة مجاناً)
+        // Check half-day permission (first one free per month)
         let deductedFromLeave = false
-        if (permission_type === "نص يوم") {
-            // ✅ جلب طلبات نص اليوم المعتمدة وقيد الانتظار في الشهر الحالي فقط
+        if (permission_type === "half_day") {
+            // Fetch half-day requests in current month only
             const { data: halfDayRequests, error: halfDayError } = await supabase
                 .from("permission_requests")
                 .select("id, deducted_from_leave")
                 .eq("employee_id", employee_id)
-                .eq("permission_type", "نص يوم")
-                .in("status", ["تمت الموافقة", "قيد الانتظار"])
-                .gte("date", monthRange.start)  // 🔴 أضف هذا الشرط
-                .lte("date", monthRange.end)    // 🔴 أضف هذا الشرط
+                .eq("permission_type", "half_day")
+                .in("status", ["approved", "pending"])
+                .gte("date", monthRange.start)
+                .lte("date", monthRange.end)
 
             console.log("📊 Half-day requests in current month:", halfDayRequests);
             console.log("📅 Month range:", monthRange);
@@ -252,7 +245,7 @@ export async function POST(req: NextRequest) {
                 }, { status: 500 })
             }
 
-            // إذا كان لديه طلب نص يوم سابق في نفس الشهر (معتمد أو قيد الانتظار)
+            // If has previous half-day request in same month
             if (halfDayRequests && halfDayRequests.length > 0) {
                 const hasFreeHalfDay = halfDayRequests.some(req => !req.deducted_from_leave)
 
@@ -260,12 +253,12 @@ export async function POST(req: NextRequest) {
                 console.log("📝 deducted_from_leave values in current month:", halfDayRequests.map(r => r.deducted_from_leave));
 
                 if (hasFreeHalfDay) {
-                    // هذا الطلب الثاني في نفس الشهر - سيتم الخصم من الإجازات
+                    // This is second request in same month - will deduct from leave
                     deductedFromLeave = true
 
                     console.log("💰 This is the second half-day request in the same month - will deduct from leave");
 
-                    // التحقق من رصيد الإجازات
+                    // Check leave balance
                     const { data: employee } = await supabase
                         .from("employees")
                         .select("current_year_leave_days, current_year_emergency_days")
@@ -304,7 +297,7 @@ export async function POST(req: NextRequest) {
                 reason,
                 hr_approved: false,
                 manager_approved: false,
-                status: "قيد الانتظار",
+                status: "pending",
                 deducted_from_leave: deductedFromLeave,
                 month_start: monthRange.start,
                 month_end: monthRange.end
@@ -318,10 +311,10 @@ export async function POST(req: NextRequest) {
         }
 
         let message_ar = "", message_en = ""
-        if (permission_type === "نص يوم" && deductedFromLeave) {
+        if (permission_type === "half_day" && deductedFromLeave) {
             message_ar = "تم تقديم طلب الإذن (سيتم خصم نصف يوم من الإجازات)"
             message_en = "Permission request submitted (will be deducted from leave balance)"
-        } else if (permission_type === "نص يوم") {
+        } else if (permission_type === "half_day") {
             message_ar = "تم تقديم طلب الإذن (نصف يوم مجاني)"
             message_en = "Permission request submitted (free half day)"
         } else {
@@ -367,7 +360,7 @@ export async function PATCH(req: NextRequest) {
             }, { status: 404 })
         }
 
-        if (request.status === "مرفوضة" || request.status === "تمت الموافقة") {
+        if (request.status === "rejected" || request.status === "approved") {
             return NextResponse.json({
                 error_ar: "لا يمكن تعديل طلب منتهي",
                 error_en: "Cannot modify a completed request"
@@ -378,7 +371,7 @@ export async function PATCH(req: NextRequest) {
             const { error } = await supabase
                 .from("permission_requests")
                 .update({
-                    status: "مرفوضة",
+                    status: "rejected",
                     updated_at: new Date()
                 })
                 .eq("id", id)
@@ -404,10 +397,10 @@ export async function PATCH(req: NextRequest) {
             updateData.hr_approved_by = approved_by
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
-            updateData.status = "تمت الموافقة"
+            updateData.status = "approved"
 
-            // إذا كان الإذن نصف يوم وسيتم الخصم من الإجازات
-            if (request.permission_type === "نص يوم" && request.deducted_from_leave) {
+            // If half-day permission with deduction from leave
+            if (request.permission_type === "half_day" && request.deducted_from_leave) {
                 console.log("💰 Attempting to deduct 0.5 day from leave balance");
                 console.log("📊 Request details:", {
                     permission_type: request.permission_type,
@@ -437,8 +430,7 @@ export async function PATCH(req: NextRequest) {
                             console.log("✅ Leave balance updated successfully");
                         }
                     }
-                    else
-                    {
+                    else {
                         const newUsedDays = (employee.current_year_emergency_days) - 0.5
                         const { error: updateError } = await supabase
                             .from("employees")
@@ -451,10 +443,6 @@ export async function PATCH(req: NextRequest) {
                             console.log("✅ Leave balance updated successfully");
                         }
                     }
-                   
-                  
-
-                    
                 }
             }
         }
@@ -464,10 +452,10 @@ export async function PATCH(req: NextRequest) {
             updateData.hr_approved_by = approved_by
 
             if (request.manager_approved) {
-                updateData.status = "تمت الموافقة"
+                updateData.status = "approved"
 
-                // إذا كان الإذن نصف يوم وسيتم الخصم من الإجازات
-                if (request.permission_type === "نص يوم" && request.deducted_from_leave) {
+                // If half-day permission with deduction from leave
+                if (request.permission_type === "half_day" && request.deducted_from_leave) {
                     console.log("💰 Attempting to deduct 0.5 day from leave balance");
                     console.log("📊 Request details:", {
                         permission_type: request.permission_type,
@@ -507,10 +495,10 @@ export async function PATCH(req: NextRequest) {
             updateData.manager_approved_by = approved_by
 
             if (request.hr_approved) {
-                updateData.status = "تمت الموافقة"
+                updateData.status = "approved"
 
-                // إذا كان الإذن نصف يوم وسيتم الخصم من الإجازات
-                if (request.permission_type === "نص يوم" && request.deducted_from_leave) {
+                // If half-day permission with deduction from leave
+                if (request.permission_type === "half_day" && request.deducted_from_leave) {
                     console.log("💰 Attempting to deduct 0.5 day from leave balance");
                     console.log("📊 Request details:", {
                         permission_type: request.permission_type,
@@ -565,10 +553,10 @@ export async function PATCH(req: NextRequest) {
 
         let message_ar = "", message_en = ""
         if (is_admin_as_manager) {
-            if (request.permission_type === "نص يوم" && request.deducted_from_leave) {
+            if (request.permission_type === "half_day" && request.deducted_from_leave) {
                 message_ar = "تمت الموافقة على الطلب (تم خصم نصف يوم من الإجازات)"
                 message_en = "Request approved (half day deducted from leave balance)"
-            } else if (request.permission_type === "نص يوم") {
+            } else if (request.permission_type === "half_day") {
                 message_ar = "تمت الموافقة على الطلب (نصف يوم مجاني)"
                 message_en = "Request approved (free half day)"
             } else {
@@ -577,10 +565,10 @@ export async function PATCH(req: NextRequest) {
             }
         } else if (user_role === "hr") {
             if (request.manager_approved) {
-                if (request.permission_type === "نص يوم" && request.deducted_from_leave) {
+                if (request.permission_type === "half_day" && request.deducted_from_leave) {
                     message_ar = "تمت الموافقة على الطلب (تم خصم نصف يوم من الإجازات)"
                     message_en = "Request approved (half day deducted from leave balance)"
-                } else if (request.permission_type === "نص يوم") {
+                } else if (request.permission_type === "half_day") {
                     message_ar = "تمت الموافقة على الطلب (نصف يوم مجاني)"
                     message_en = "Request approved (free half day)"
                 } else {
@@ -593,10 +581,10 @@ export async function PATCH(req: NextRequest) {
             }
         } else {
             if (request.hr_approved) {
-                if (request.permission_type === "نص يوم" && request.deducted_from_leave) {
+                if (request.permission_type === "half_day" && request.deducted_from_leave) {
                     message_ar = "تمت الموافقة على الطلب (تم خصم نصف يوم من الإجازات)"
                     message_en = "Request approved (half day deducted from leave balance)"
-                } else if (request.permission_type === "نص يوم") {
+                } else if (request.permission_type === "half_day") {
                     message_ar = "تمت الموافقة على الطلب (نصف يوم مجاني)"
                     message_en = "Request approved (free half day)"
                 } else {
@@ -638,7 +626,7 @@ export async function DELETE(req: NextRequest) {
             .select("*")
             .eq("id", id)
             .eq("employee_id", employee_id)
-            .eq("status", "قيد الانتظار")
+            .eq("status", "pending")
             .single()
 
         if (fetchError || !request) {

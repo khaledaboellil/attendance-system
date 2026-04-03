@@ -82,11 +82,11 @@ export async function GET(req: NextRequest) {
 
         if (status) {
             if (status === "pending") {
-                query = query.neq("status", "مرفوضة").neq("status", "تمت الموافقة")
+                query = query.neq("status", "rejected").neq("status", "approved")
             } else if (status === "approved") {
-                query = query.eq("status", "تمت الموافقة")
+                query = query.eq("status", "approved")
             } else if (status === "rejected") {
-                query = query.eq("status", "مرفوضة")
+                query = query.eq("status", "rejected")
             }
         }
 
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
                 reason,
                 hr_approved: false,
                 manager_approved: false,
-                status: "قيد الانتظار"
+                status: "pending"
             }])
 
         if (error) {
@@ -176,7 +176,7 @@ export async function PATCH(req: NextRequest) {
             }, { status: 404 })
         }
 
-        if (request.status === "مرفوضة" || request.status === "تمت الموافقة") {
+        if (request.status === "rejected" || request.status === "approved") {
             return NextResponse.json({
                 error_ar: "لا يمكن تعديل طلب منتهي",
                 error_en: "Cannot modify a completed request"
@@ -187,7 +187,7 @@ export async function PATCH(req: NextRequest) {
             const { error } = await supabase
                 .from("overtime_requests")
                 .update({
-                    status: "مرفوضة",
+                    status: "rejected",
                     updated_at: new Date()
                 })
                 .eq("id", id)
@@ -212,14 +212,14 @@ export async function PATCH(req: NextRequest) {
             updateData.hr_approved_by = approved_by
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
-            updateData.status = "تمت الموافقة"
+            updateData.status = "approved"
         }
         else if (user_role === "hr") {
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
 
             if (request.manager_approved) {
-                updateData.status = "تمت الموافقة"
+                updateData.status = "approved"
             }
         }
         else if (user_role === "manager") {
@@ -227,7 +227,7 @@ export async function PATCH(req: NextRequest) {
             updateData.manager_approved_by = approved_by
 
             if (request.hr_approved) {
-                updateData.status = "تمت الموافقة"
+                updateData.status = "approved"
             }
         }
         else {
@@ -299,7 +299,7 @@ export async function DELETE(req: NextRequest) {
             .select("*")
             .eq("id", id)
             .eq("employee_id", employee_id)
-            .eq("status", "قيد الانتظار")
+            .eq("status", "pending")
             .single()
 
         if (fetchError || !request) {

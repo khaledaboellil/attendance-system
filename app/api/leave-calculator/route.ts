@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // جلب بيانات الموظف
+        // Fetch employee data
         const { data: employee, error: empError } = await supabase
             .from("employees")
             .select("current_year_leave_days, current_year_emergency_days, name, hire_date")
@@ -32,13 +32,13 @@ export async function GET(req: NextRequest) {
             }, { status: 404 })
         }
 
-        // حساب الإجازات السنوية المستخدمة من الطلبات المعتمدة
+        // Calculate used annual leave from approved requests
         const { data: annualRequests } = await supabase
             .from("leave_requests")
             .select("start_date, end_date")
             .eq("employee_id", employee_id)
-            .eq("leave_type", "سنوية")
-            .eq("status", "تمت الموافقة")
+            .eq("leave_type", "annual")
+            .eq("status", "approved")
 
         let usedAnnual = 0
         annualRequests?.forEach(req => {
@@ -48,13 +48,13 @@ export async function GET(req: NextRequest) {
             usedAnnual += d
         })
 
-        // حساب الإجازات العارضة المستخدمة من الطلبات المعتمدة
+        // Calculate used emergency leave from approved requests
         const { data: emergencyRequests } = await supabase
             .from("leave_requests")
             .select("start_date, end_date")
             .eq("employee_id", employee_id)
-            .eq("leave_type", "عارضة")
-            .eq("status", "تمت الموافقة")
+            .eq("leave_type", "emergency")
+            .eq("status", "approved")
 
         let usedEmergency = 0
         emergencyRequests?.forEach(req => {

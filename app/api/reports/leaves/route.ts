@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
         const user_id = searchParams.get("user_id")
 
         if (!from || !to) {
-            return NextResponse.json({ error: "يجب تحديد تاريخ البداية والنهاية" }, { status: 400 })
+            return NextResponse.json({ error: "From and to dates are required" }, { status: 400 })
         }
 
         let query = supabase
@@ -30,16 +30,14 @@ export async function GET(req: NextRequest) {
                     department:departments(id, name)
                 )
             `)
-            .eq("status", "تمت الموافقة")
+            .eq("status", "approved")
             .gte("start_date", from)
             .lte("end_date", to)
 
-        // فلترة حسب الموظف
         if (employee_id && employee_id !== "all") {
             query = query.eq("employee_id", employee_id)
         }
 
-        // فلترة حسب القسم
         if (department_id && department_id !== "all") {
             const { data: deptEmployees } = await supabase
                 .from("employees")
@@ -54,7 +52,6 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // لو المدير (manager) يشوف بس موظفي قسمه
         if (user_role === "manager" && user_id) {
             const { data: manager } = await supabase
                 .from("employees")
@@ -83,7 +80,6 @@ export async function GET(req: NextRequest) {
 
         if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-        // حساب عدد الأيام لكل طلب
         const formattedData = data?.map(item => {
             const start = new Date(item.start_date)
             const end = new Date(item.end_date)
@@ -108,6 +104,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(formattedData || [])
     } catch (error) {
         console.error(error)
-        return NextResponse.json({ error: "حدث خطأ أثناء جلب التقرير" }, { status: 500 })
+        return NextResponse.json({ error: "Error fetching report" }, { status: 500 })
     }
 }

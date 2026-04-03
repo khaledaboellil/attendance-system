@@ -3,9 +3,9 @@
     "",
     "\\app",
     "\\app\\admin",
-    "\\app\\employee",
     "\\app\\manager",
     "\\context"
   ],
+  "SelectedNode": "\\context\\LanguageContext.tsx",
   "PreviewInSolutionExplorer": false
 }

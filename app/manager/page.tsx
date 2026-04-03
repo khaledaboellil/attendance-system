@@ -135,7 +135,7 @@ export default function ManagerPage() {
     // ==================== Manager's Personal Requests ====================
     const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
     const [showLeaveForm, setShowLeaveForm] = useState(false)
-    const [leaveType, setLeaveType] = useState("سنوية")
+    const [leaveType, setLeaveType] = useState("annual")
     const [leaveStart, setLeaveStart] = useState("")
     const [leaveEnd, setLeaveEnd] = useState("")
     const [leaveReason, setLeaveReason] = useState("")
@@ -159,7 +159,7 @@ export default function ManagerPage() {
 
     const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([])
     const [showPermissionForm, setShowPermissionForm] = useState(false)
-    const [permissionType, setPermissionType] = useState("ساعة")
+    const [permissionType, setPermissionType] = useState("hour")
     const [permissionDate, setPermissionDate] = useState("")
     const [permissionStartTime, setPermissionStartTime] = useState("")
     const [permissionEndTime, setPermissionEndTime] = useState("")
@@ -504,10 +504,10 @@ export default function ManagerPage() {
         const end = new Date(leaveEnd)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-        if (leaveType === "سنوية" && days > leaveBalance.remaining_annual) {
+        if (leaveType === "annual" && days > leaveBalance.remaining_annual) {
             return alert(`${t('insufficient_balance')} ${t('remaining')}: ${leaveBalance.remaining_annual} ${t('days')}`)
         }
-        if (leaveType === "عارضة" && days > leaveBalance.remaining_emergency) {
+        if (leaveType === "emergency" && days > leaveBalance.remaining_emergency) {
             return alert(`${t('insufficient_emergency_balance')} ${t('remaining')}: ${leaveBalance.remaining_emergency} ${t('days')}`)
         }
 
@@ -598,7 +598,7 @@ export default function ManagerPage() {
             return
         }
 
-        if ((permissionType === "ساعة" || permissionType === "ساعتين") && !permissionStartTime) {
+        if ((permissionType === "hour" || permissionType === "two_hours") && !permissionStartTime) {
             alert(t('select_start_time'))
             return
         }
@@ -623,8 +623,8 @@ export default function ManagerPage() {
 
             if (res.ok) {
                 let successMessage = ""
-                if (permissionType === "نص يوم") {
-                    if (data.message_ar?.includes('خصم')) {
+                if (permissionType === "half_day") {
+                    if (data.message_en?.includes('deduct') || data.message_ar?.includes('خصم')) {
                         successMessage = language === 'ar' ? data.message_ar : data.message_en
                     } else {
                         successMessage = language === 'ar' ? data.message_ar : data.message_en
@@ -636,7 +636,7 @@ export default function ManagerPage() {
                 alert(successMessage || (language === 'ar' ? 'تم تقديم الطلب بنجاح' : 'Request submitted successfully'))
 
                 setShowPermissionForm(false)
-                setPermissionType("ساعة")
+                setPermissionType("hour")
                 setPermissionDate("")
                 setPermissionStartTime("")
                 setPermissionEndTime("")
@@ -740,9 +740,23 @@ export default function ManagerPage() {
                 })
             })
             const data = await res.json()
-            showMessage(data, res.ok)
+
+            // عرض الرسالة المناسبة
             if (res.ok) {
+                if (type === "check_in") {
+                    alert(data.message_ar && data.message_en
+                        ? (language === 'ar' ? data.message_ar : data.message_en)
+                        : t('check_in_registered'))
+                } else {
+                    alert(data.message_ar && data.message_en
+                        ? (language === 'ar' ? data.message_ar : data.message_en)
+                        : t('check_out_registered'))
+                }
                 fetchTodayAttendance(managerUsername)
+            } else {
+                alert(data.error_ar && data.error_en
+                    ? (language === 'ar' ? data.error_ar : data.error_en)
+                    : t('error_occurred'))
             }
         } catch (err) {
             console.error(err)
@@ -848,8 +862,8 @@ export default function ManagerPage() {
     }
 
     const getApprovalStatus = (req: any) => {
-        if (req.status === "مرفوضة") return { text: t('rejected'), color: "#f44336" }
-        if (req.status === "تمت الموافقة") return { text: t('approved'), color: "#4caf50" }
+        if (req.status === "rejected") return { text: t('rejected'), color: "#f44336" }
+        if (req.status === "approved") return { text: t('approved'), color: "#4caf50" }
         if (req.hr_approved && req.manager_approved) return { text: t('approved'), color: "#4caf50" }
         if (req.hr_approved || req.manager_approved) return { text: t('one_approval'), color: "#ff9800" }
         return { text: t('pending_approvals'), color: "#9e9e9e" }
@@ -1080,7 +1094,7 @@ export default function ManagerPage() {
                                     ) : (
                                         allRequests.map(req => {
                                             const deptName = departments.find(d => d.id === req.employees?.department_id)?.name || "-"
-                                            const canApprove = !req.manager_approved && req.status === "قيد الانتظار"
+                                            const canApprove = !req.manager_approved && req.status === "pending"
 
                                             let details = ""
                                             if (req.requestType === "leave") {
@@ -1109,7 +1123,7 @@ export default function ManagerPage() {
                                                     </td>
                                                     <td style={styles.tableCell}>{details}</td>
                                                     <td style={styles.tableCell}>
-                                                        {req.status === "مرفوضة" ? (
+                                                        {req.status === "rejected" ? (
                                                             <span style={{
                                                                 ...styles.approvalBadge,
                                                                 backgroundColor: '#ffebee',
@@ -1118,7 +1132,7 @@ export default function ManagerPage() {
                                                             }}>
                                                                 ❌ {t('rejected')}
                                                             </span>
-                                                        ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                                        ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                             <span style={{
                                                                 ...styles.approvalBadge,
                                                                 backgroundColor: '#e8f5e9',
@@ -1170,7 +1184,7 @@ export default function ManagerPage() {
                                                                 </button>
                                                             </>
                                                         )}
-                                                        {req.manager_approved && req.status === "قيد الانتظار" && (
+                                                        {req.manager_approved && req.status === "pending" && (
                                                             <span style={styles.approvedBadge}>✅ {t('approved')}</span>
                                                         )}
                                                     </td>
@@ -1342,10 +1356,10 @@ export default function ManagerPage() {
                             <div style={styles.formCard}>
                                 <h4 style={styles.formTitle}>{t('new_leave_request')}</h4>
                                 <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={styles.select}>
-                                    <option value="سنوية">{t('annual_leave')}</option>
-                                    <option value="مرضية">{t('sick_leave')}</option>
-                                    <option value="عارضة">{t('emergency_leave')}</option>
-                                    <option value="غير مدفوعة">{t('unpaid_leave')}</option>
+                                    <option value="annual">{t('annual_leave')}</option>
+                                    <option value="sick">{t('sick_leave')}</option>
+                                    <option value="emergency">{t('emergency_leave')}</option>
+                                    <option value="unpaid">{t('unpaid_leave')}</option>
                                 </select>
                                 <div style={styles.dateRow}>
                                     {/* تاريخ البداية */}
@@ -1386,9 +1400,9 @@ export default function ManagerPage() {
                                 <div key={req.id} style={styles.requestCard}>
                                     <div style={styles.requestHeader}>
                                         <span style={styles.requestType}>{req.leave_type}</span>
-                                        {req.status === "مرفوضة" ? (
+                                        {req.status === "rejected" ? (
                                             <span style={{ ...styles.approvalBadge, backgroundColor: '#ffebee', color: '#f44336', border: '1px solid #f44336' }}>❌ {t('rejected')}</span>
-                                        ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                        ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                             <span style={{ ...styles.approvalBadge, backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50' }}>✅ {t('approved')}</span>
                                         ) : (
                                             <div style={styles.approvalContainer}>
@@ -1407,7 +1421,7 @@ export default function ManagerPage() {
                                     {req.reason && <p style={styles.requestReason}>{t('reason')}: {req.reason}</p>}
                                     <div style={styles.requestFooter}>
                                         <span style={styles.requestDate}>{t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
-                                        {req.status === "قيد الانتظار" && <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>}
+                                        {req.status === "pending" && <button onClick={() => deleteLeaveRequest(req.id)} style={styles.deleteButton}>🗑️ {t('delete')}</button>}
                                     </div>
                                 </div>
                             ))}
@@ -1475,7 +1489,7 @@ export default function ManagerPage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{t('overtime')}</span>
-                                            {req.status === "مرفوضة" ? (
+                                            {req.status === "rejected" ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
                                                     backgroundColor: '#ffebee',
@@ -1484,7 +1498,7 @@ export default function ManagerPage() {
                                                 }}>
                                                     ❌ {t('rejected')}
                                                 </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
                                                     backgroundColor: '#e8f5e9',
@@ -1533,7 +1547,7 @@ export default function ManagerPage() {
                                             <span style={styles.requestDate}>
                                                 {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
-                                            {req.status === "قيد الانتظار" && (
+                                            {req.status === "pending" && (
                                                 <button
                                                     onClick={() => deleteOvertimeRequest(req.id)}
                                                     style={styles.deleteButton}
@@ -1572,9 +1586,9 @@ export default function ManagerPage() {
                                     onChange={e => setPermissionType(e.target.value)}
                                     style={styles.select}
                                 >
-                                    <option value="ساعة">{t('one_hour')}</option>
-                                    <option value="ساعتين">{t('two_hours')}</option>
-                                    <option value="نص يوم">{t('half_day')}</option>
+                                    <option value="hour">{t('one_hour')}</option>
+                                    <option value="two_hours">{t('two_hours')}</option>
+                                    <option value="half_day">{t('half_day')}</option>
                                 </select>
 
                                 <div style={styles.dateField}>
@@ -1587,7 +1601,7 @@ export default function ManagerPage() {
                                     />
                                 </div>
 
-                                {(permissionType === "ساعة" || permissionType === "ساعتين") && (
+                                {(permissionType === "hour" || permissionType === "two_hours") && (
                                     <div style={styles.timeField}>
                                         <label style={styles.label}>{t('start_time')}:</label>
                                         <input
@@ -1599,7 +1613,7 @@ export default function ManagerPage() {
                                     </div>
                                 )}
 
-                                {permissionType === "نص يوم" && (
+                                {permissionType === "half_day" && (
                                     <div style={styles.timeRow}>
                                         <div style={styles.timeField}>
                                             <label style={styles.label}>{t('from')}:</label>
@@ -1648,7 +1662,7 @@ export default function ManagerPage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{t('permission')} {req.permission_type}</span>
-                                            {req.status === "مرفوضة" ? (
+                                            {req.status === "rejected" ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
                                                     backgroundColor: '#ffebee',
@@ -1657,7 +1671,7 @@ export default function ManagerPage() {
                                                 }}>
                                                     ❌ {t('rejected')}
                                                 </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
                                                     backgroundColor: '#e8f5e9',
@@ -1703,7 +1717,7 @@ export default function ManagerPage() {
 
                                         {req.start_time && (
                                             <p style={styles.requestReason}>
-                                                {req.permission_type === "نص يوم"
+                                                {req.permission_type === "half_day"
                                                     ? `${t('from')} ${req.start_time} ${t('to')} ${req.end_time || "?"}`
                                                     : `${t('from')} ${req.start_time}`}
                                             </p>
@@ -1721,7 +1735,7 @@ export default function ManagerPage() {
                                             <span style={styles.requestDate}>
                                                 {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
-                                            {req.status === "قيد الانتظار" && (
+                                            {req.status === "pending" && (
                                                 <button
                                                     onClick={() => deletePermissionRequest(req.id)}
                                                     style={styles.deleteButton}
@@ -1811,7 +1825,7 @@ export default function ManagerPage() {
                                     <div key={req.id} style={styles.requestCard}>
                                         <div style={styles.requestHeader}>
                                             <span style={styles.requestType}>{t('correction_for')} {req.date}</span>
-                                            {req.status === "مرفوضة" ? (
+                                            {req.status === "rejected" ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
                                                     backgroundColor: '#ffebee',
@@ -1820,7 +1834,7 @@ export default function ManagerPage() {
                                                 }}>
                                                     ❌ {t('rejected')}
                                                 </span>
-                                            ) : req.status === "تمت الموافقة" || (req.hr_approved && req.manager_approved) ? (
+                                            ) : req.status === "approved" || (req.hr_approved && req.manager_approved) ? (
                                                 <span style={{
                                                     ...styles.approvalBadge,
                                                     backgroundColor: '#e8f5e9',
@@ -1878,7 +1892,7 @@ export default function ManagerPage() {
                                             <span style={styles.requestDate}>
                                                 {t('submitted')}: {new Date(req.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
                                             </span>
-                                            {req.status === "قيد الانتظار" && (
+                                            {req.status === "pending" && (
                                                 <button
                                                     onClick={() => deleteCorrectionRequest(req.id)}
                                                     style={styles.deleteButton}
