@@ -748,7 +748,7 @@ export default function AdminPage() {
     }
 
     const submitPermissionRequest = async () => {
-        if (!permissionDate || !permissionReason) {
+        if (!permissionDate) {
             alert(t('select_date_and_reason'))
             return
         }
@@ -2469,7 +2469,7 @@ export default function AdminPage() {
                                     </div>
                                 )}
 
-                                <textarea placeholder={t('reason_required')} value={permissionReason} onChange={e => setPermissionReason(e.target.value)} style={styles.textarea} rows={3} required />
+                                <textarea placeholder={t('reason_optional')} value={permissionReason} onChange={e => setPermissionReason(e.target.value)} style={styles.textarea} rows={3} required />
 
                                 <button onClick={submitPermissionRequest} style={styles.submitButton}>
                                     ✅ {t('submit_request')}
@@ -2573,7 +2573,7 @@ export default function AdminPage() {
                                     </div>
                                 </div>
 
-                                <textarea placeholder={t('reason_required')} value={correctionReason} onChange={e => setCorrectionReason(e.target.value)} style={styles.textarea} rows={3} required />
+                                <textarea placeholder={t('reason_optional')} value={correctionReason} onChange={e => setCorrectionReason(e.target.value)} style={styles.textarea} rows={3} required />
 
                                 <button onClick={submitCorrectionRequest} style={styles.submitButton}>
                                     ✅ {t('submit_request')}

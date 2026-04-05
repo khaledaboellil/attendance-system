@@ -2,8 +2,9 @@
   "ExpandedNodes": [
     "",
     "\\app",
-    "\\app\\manager"
+    "\\app\\api",
+    "\\app\\api\\attendance-correction"
   ],
-  "SelectedNode": "\\app\\manager\\page.tsx",
+  "SelectedNode": "\\app\\api\\attendance-correction\\route.ts",
   "PreviewInSolutionExplorer": false
 }
