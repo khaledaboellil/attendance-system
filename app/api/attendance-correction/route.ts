@@ -1,11 +1,54 @@
 ﻿// app/api/attendance-correction/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { toZonedTime, formatInTimeZone } from 'date-fns-tz'
+import { formatInTimeZone } from 'date-fns-tz'
+
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+const TIMEZONE = 'Africa/Cairo'
+
+// ✅ دالة لتحويل الوقت مع مراعاة المنطقة الزمنية
+function convertToTimestamp(dateStr: string, timeValue: string | null): string | null {
+    if (!timeValue) return null
+
+    try {
+        // إذا كان الوقت كاملاً مع منطقة زمنية
+        if (timeValue.includes('T') || timeValue.includes('Z') || timeValue.includes('+')) {
+            const parsedDate = new Date(timeValue)
+            if (!isNaN(parsedDate.getTime())) {
+                return parsedDate.toISOString()
+            }
+        }
+
+        // استخراج الوقت فقط
+        let timeOnly = timeValue
+        if (timeValue.includes('T')) {
+            timeOnly = timeValue.split('T')[1]
+        }
+
+        // ✅ استخدام formatInTimeZone لإنشاء التاريخ الصحيح
+        const dateTimeString = `${dateStr}T${timeOnly}:00`
+        const formattedDate = formatInTimeZone(
+            new Date(dateTimeString),
+            TIMEZONE,
+            "yyyy-MM-dd'T'HH:mm:ssXXX"
+        )
+
+        // تحويل إلى ISO string
+        const parsedDate = new Date(formattedDate)
+        if (!isNaN(parsedDate.getTime())) {
+            return parsedDate.toISOString()
+        }
+
+        return null
+    } catch (error) {
+        console.error("Error converting timestamp:", error)
+        return null
+    }
+}
 
 export async function GET(req: NextRequest) {
     try {
@@ -110,68 +153,24 @@ export async function GET(req: NextRequest) {
     }
 }
 
-// app/api/attendance-correction/route.ts - POST function كاملة
-
 export async function POST(req: NextRequest) {
     try {
         const { employee_id, date, expected_check_in, expected_check_out, reason } = await req.json()
 
         console.log("📥 Received:", { employee_id, date, expected_check_in, expected_check_out, reason })
 
-        // التحقق من الحقول المطلوبة
-        if (!employee_id ) {
+        if (!employee_id || !date) {
             return NextResponse.json({
                 error_ar: "جميع الحقول المطلوبة يجب إدخالها",
                 error_en: "All required fields must be filled"
             }, { status: 400 })
         }
 
-        if (!date) {
-            return NextResponse.json({
-                error_ar: "التاريخ مطلوب",
-                error_en: "Date is required"
-            }, { status: 400 })
-        }
-
-     
-        // ✅ دالة لتحويل الوقت مع مراعاة المنطقة الزمنية
-        function convertToTimestamp(dateStr: string, timeValue: string | null, timezone: string = 'Africa/Cairo'): string | null {
-            if (!timeValue) return null
-
-            try {
-                // إذا كان الوقت كاملاً مع منطقة زمنية
-                if (timeValue.includes('T') || timeValue.includes('Z') || timeValue.includes('+')) {
-                    const parsedDate = new Date(timeValue)
-                    if (!isNaN(parsedDate.getTime())) {
-                        return parsedDate.toISOString()
-                    }
-                }
-
-                // استخراج الوقت فقط
-                let timeOnly = timeValue
-                if (timeValue.includes('T')) {
-                    timeOnly = timeValue.split('T')[1]
-                }
-
-                // إنشاء التاريخ مع المنطقة الزمنية المحددة
-                const dateTimeString = `${dateStr}T${timeOnly}:00`
-                const zonedDate = toZonedTime(new Date(dateTimeString), timezone)
-
-                return zonedDate.toISOString()
-            } catch (error) {
-                console.error("Error converting timestamp:", error)
-                return null
-            }
-        }
-        // ✅ المنطقة الزمنية لمصر
-        const TIMEZONE = 'Africa/Cairo'
-
-        let checkInTimestamp = convertToTimestamp(date, expected_check_in, TIMEZONE)
-        let checkOutTimestamp = convertToTimestamp(date, expected_check_out, TIMEZONE)
+        let checkInTimestamp = convertToTimestamp(date, expected_check_in)
+        let checkOutTimestamp = convertToTimestamp(date, expected_check_out)
 
         console.log("✅ Formatted:", { checkInTimestamp, checkOutTimestamp })
 
-        // التأكد من وجود وقت واحد على الأقل
         if (!checkInTimestamp && !checkOutTimestamp) {
             return NextResponse.json({
                 error_ar: "يجب تحديد وقت الحضور أو الانصراف بشكل صحيح",
@@ -214,7 +213,7 @@ export async function POST(req: NextRequest) {
                 employee_id,
                 check_in: checkInTimestamp,
                 check_out: checkOutTimestamp,
-                reason,
+                reason: reason || null,
                 hr_approved: false,
                 manager_approved: false,
                 status: "pending",
