@@ -1,7 +1,7 @@
 ﻿// app/api/attendance-correction/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz'
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -133,38 +133,41 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // دالة لتحويل الوقت إلى timestamp كامل
-        function formatToTimestamp(dateStr: string, timeValue: string | null): string | null {
+     
+        // ✅ دالة لتحويل الوقت مع مراعاة المنطقة الزمنية
+        function convertToTimestamp(dateStr: string, timeValue: string | null, timezone: string = 'Africa/Cairo'): string | null {
             if (!timeValue) return null
 
-            // لو كان already full timestamp
-            if (timeValue.includes('T') && timeValue.includes('-')) {
-                const parsedDate = new Date(timeValue)
-                if (!isNaN(parsedDate.getTime())) {
-                    return parsedDate.toISOString()
+            try {
+                // إذا كان الوقت كاملاً مع منطقة زمنية
+                if (timeValue.includes('T') || timeValue.includes('Z') || timeValue.includes('+')) {
+                    const parsedDate = new Date(timeValue)
+                    if (!isNaN(parsedDate.getTime())) {
+                        return parsedDate.toISOString()
+                    }
                 }
-            }
 
-            // استخراج الوقت فقط (HH:MM)
-            let timeOnly = timeValue
-            if (timeValue.includes('T')) {
-                timeOnly = timeValue.split('T')[1]
-            }
+                // استخراج الوقت فقط
+                let timeOnly = timeValue
+                if (timeValue.includes('T')) {
+                    timeOnly = timeValue.split('T')[1]
+                }
 
-            // استخدام التاريخ من الواجهة
-            const fullDateTime = `${dateStr}T${timeOnly}:00`
-            const parsedDate = new Date(fullDateTime)
+                // إنشاء التاريخ مع المنطقة الزمنية المحددة
+                const dateTimeString = `${dateStr}T${timeOnly}:00`
+                const zonedDate = toZonedTime(new Date(dateTimeString), timezone)
 
-            if (isNaN(parsedDate.getTime())) {
+                return zonedDate.toISOString()
+            } catch (error) {
+                console.error("Error converting timestamp:", error)
                 return null
             }
-
-            return parsedDate.toISOString()
         }
+        // ✅ المنطقة الزمنية لمصر
+        const TIMEZONE = 'Africa/Cairo'
 
-        // تحويل الأوقات إلى timestamp
-        let checkInTimestamp = formatToTimestamp(date, expected_check_in)
-        let checkOutTimestamp = formatToTimestamp(date, expected_check_out)
+        let checkInTimestamp = convertToTimestamp(date, expected_check_in, TIMEZONE)
+        let checkOutTimestamp = convertToTimestamp(date, expected_check_out, TIMEZONE)
 
         console.log("✅ Formatted:", { checkInTimestamp, checkOutTimestamp })
 
