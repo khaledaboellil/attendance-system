@@ -11,6 +11,7 @@ const supabase = createClient(
 const TIMEZONE = 'Africa/Cairo'
 
 // ✅ نفس دالة كود الحضور بالضبط
+// ✅ دالة لتحويل الوقت مع المنطقة الزمنية المحلية تلقائياً
 function createTimestamp(dateStr: string, timeValue: string | null): string | null {
     if (!timeValue) return null
 
@@ -28,15 +29,26 @@ function createTimestamp(dateStr: string, timeValue: string | null): string | nu
         timeOnly = timeValue.split('T')[1]
     }
 
-    // ✅ نفس طريقة new Date() بالضبط
-    const fullDateTime = `${dateStr}T${timeOnly}:00`
-    const date = new Date(fullDateTime)
+    // ✅ استخراج التاريخ والوقت
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const [hours, minutes] = timeOnly.split(':').map(Number)
 
-    if (isNaN(date.getTime())) {
+    // ✅ إنشاء التاريخ كـ Local Time
+    const localDate = new Date(year, month - 1, day, hours, minutes, 0)
+
+    if (isNaN(localDate.getTime())) {
         return null
     }
 
-    return date.toISOString()
+    // ✅ حساب فرق المنطقة الزمنية تلقائياً
+    // getTimezoneOffset() بترجع الفرق بالدقائق بين التوقيت المحلي و UTC
+    const timezoneOffset = -localDate.getTimezoneOffset() // بالساعات (مصر +3 أو +2)
+    const offsetMilliseconds = timezoneOffset * 60 * 1000 // تحويل إلى ملي ثانية
+
+    // ✅ تعديل التاريخ بناءً على فرق المنطقة الزمنية
+    const utcDate = new Date(localDate.getTime() - offsetMilliseconds)
+
+    return utcDate.toISOString()
 }
 
 export async function GET(req: NextRequest) {
