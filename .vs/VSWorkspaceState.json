@@ -3,7 +3,9 @@
     "",
     "\\app",
     "\\app\\api",
+    "\\app\\api\\attendance",
     "\\app\\api\\attendance-correction"
   ],
+  "SelectedNode": "\\app\\api\\attendance-correction\\route.ts",
   "PreviewInSolutionExplorer": false
 }

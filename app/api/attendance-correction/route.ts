@@ -1,53 +1,42 @@
 ﻿// app/api/attendance-correction/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { formatInTimeZone } from 'date-fns-tz'
-
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz'
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// ✅ المنطقة الزمنية لمصر
 const TIMEZONE = 'Africa/Cairo'
 
-// ✅ دالة لتحويل الوقت مع مراعاة المنطقة الزمنية
-function convertToTimestamp(dateStr: string, timeValue: string | null): string | null {
+// ✅ نفس دالة كود الحضور بالضبط
+function createTimestamp(dateStr: string, timeValue: string | null): string | null {
     if (!timeValue) return null
 
-    try {
-        // إذا كان الوقت كاملاً مع منطقة زمنية
-        if (timeValue.includes('T') || timeValue.includes('Z') || timeValue.includes('+')) {
-            const parsedDate = new Date(timeValue)
-            if (!isNaN(parsedDate.getTime())) {
-                return parsedDate.toISOString()
-            }
-        }
-
-        // استخراج الوقت فقط
-        let timeOnly = timeValue
-        if (timeValue.includes('T')) {
-            timeOnly = timeValue.split('T')[1]
-        }
-
-        // ✅ استخدام formatInTimeZone لإنشاء التاريخ الصحيح
-        const dateTimeString = `${dateStr}T${timeOnly}:00`
-        const formattedDate = formatInTimeZone(
-            new Date(dateTimeString),
-            TIMEZONE,
-            "yyyy-MM-dd'T'HH:mm:ssXXX"
-        )
-
-        // تحويل إلى ISO string
-        const parsedDate = new Date(formattedDate)
+    // لو كان already full timestamp
+    if (timeValue.includes('T') && timeValue.includes('-')) {
+        const parsedDate = new Date(timeValue)
         if (!isNaN(parsedDate.getTime())) {
             return parsedDate.toISOString()
         }
+    }
 
-        return null
-    } catch (error) {
-        console.error("Error converting timestamp:", error)
+    // استخراج الوقت فقط
+    let timeOnly = timeValue
+    if (timeValue.includes('T')) {
+        timeOnly = timeValue.split('T')[1]
+    }
+
+    // ✅ نفس طريقة new Date() بالضبط
+    const fullDateTime = `${dateStr}T${timeOnly}:00`
+    const date = new Date(fullDateTime)
+
+    if (isNaN(date.getTime())) {
         return null
     }
+
+    return date.toISOString()
 }
 
 export async function GET(req: NextRequest) {
@@ -153,24 +142,36 @@ export async function GET(req: NextRequest) {
     }
 }
 
+// app/api/attendance-correction/route.ts - POST function كاملة
+
 export async function POST(req: NextRequest) {
     try {
         const { employee_id, date, expected_check_in, expected_check_out, reason } = await req.json()
 
         console.log("📥 Received:", { employee_id, date, expected_check_in, expected_check_out, reason })
 
-        if (!employee_id || !date) {
+        // التحقق من الحقول المطلوبة
+        if (!employee_id) {
             return NextResponse.json({
                 error_ar: "جميع الحقول المطلوبة يجب إدخالها",
                 error_en: "All required fields must be filled"
             }, { status: 400 })
         }
 
-        let checkInTimestamp = convertToTimestamp(date, expected_check_in)
-        let checkOutTimestamp = convertToTimestamp(date, expected_check_out)
+        if (!date) {
+            return NextResponse.json({
+                error_ar: "التاريخ مطلوب",
+                error_en: "Date is required"
+            }, { status: 400 })
+        }
+
+        // ✅ نفس طريقة كود الحضور بالضبط
+        const checkInTimestamp = createTimestamp(date, expected_check_in)
+        const checkOutTimestamp = createTimestamp(date, expected_check_out)
 
         console.log("✅ Formatted:", { checkInTimestamp, checkOutTimestamp })
 
+        // التأكد من وجود وقت واحد على الأقل
         if (!checkInTimestamp && !checkOutTimestamp) {
             return NextResponse.json({
                 error_ar: "يجب تحديد وقت الحضور أو الانصراف بشكل صحيح",
@@ -213,7 +214,7 @@ export async function POST(req: NextRequest) {
                 employee_id,
                 check_in: checkInTimestamp,
                 check_out: checkOutTimestamp,
-                reason: reason || null,
+                reason,
                 hr_approved: false,
                 manager_approved: false,
                 status: "pending",
