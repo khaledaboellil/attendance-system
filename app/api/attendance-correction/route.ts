@@ -11,28 +11,43 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-function subtractHours(date: Date, hours: number): Date {
+// app/api/attendance-correction/route.ts
+import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+import { getTimezoneOffset } from 'date-fns-tz'
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+// ✅ دالة لحساب فرق التوقيت بين مصر والتوقيت المحلي
+function getEgyptTimeDifference(): number {
+    // الوقت الحالي بتوقيت مصر
+    const now = new Date()
+    const egyptTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }))
+
+    // الفرق بالساعات
+    const diffHours = (egyptTime.getTime() - now.getTime()) / (1000 * 60 * 60)
+    return Math.round(diffHours)
+}
+
+// ✅ دالة لطرح الفرق من الوقت
+function subtractHours(date: Date): Date {
+    const diff = getEgyptTimeDifference()
     const result = new Date(date)
-    result.setHours(result.getHours() - hours)
+    result.setHours(result.getHours() - diff)
     return result
 }
 
-
 function createTimestamp(dateStr: string, timeValue: string | null): string | null {
-    const egyptOffset = getTimezoneOffset('Africa/Cairo') // milliseconds
-    const localOffset = -new Date().getTimezoneOffset() * 60 * 1000 // milliseconds
-
-    const diff = Math.round(
-        (localOffset - egyptOffset) / (1000 * 60 * 60)
-    )
     if (!timeValue) return null
 
     // لو كان already full timestamp
     if (timeValue.includes('T') && timeValue.includes('-')) {
         const parsedDate = new Date(timeValue)
         if (!isNaN(parsedDate.getTime())) {
-            // طرح 3 ساعات
-            const adjustedDate = subtractHours(parsedDate, 3)
+            const adjustedDate = subtractHours(parsedDate)
             return adjustedDate.toISOString()
         }
     }
@@ -51,10 +66,11 @@ function createTimestamp(dateStr: string, timeValue: string | null): string | nu
         return null
     }
 
-    // ✅ طرح 3 ساعات يدوياً
-    const adjustedDate = subtractHours(date, diff)
+    const adjustedDate = subtractHours(date)
     return adjustedDate.toISOString()
 }
+
+// ... باقي الكود (GET, POST, PATCH, DELETE) نفس ما هو
 
 export async function GET(req: NextRequest) {
     try {
