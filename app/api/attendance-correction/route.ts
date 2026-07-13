@@ -1,25 +1,39 @@
 ﻿// app/api/attendance-correction/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { toZonedTime, formatInTimeZone } from 'date-fns-tz'
+
+import {
+    getTimezoneOffset,
+    toZonedTime,
+    formatInTimeZone,
+} from 'date-fns-tz'
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+function subtractHours(date: Date, hours: number): Date {
+    const result = new Date(date)
+    result.setHours(result.getHours() - hours)
+    return result
+}
 
-// ✅ المنطقة الزمنية لمصر
-const TIMEZONE = 'Africa/Cairo'
 
-// ✅ نفس دالة كود الحضور بالضبط
-// ✅ دالة لتحويل الوقت مع المنطقة الزمنية المحلية تلقائياً
 function createTimestamp(dateStr: string, timeValue: string | null): string | null {
+    const egyptOffset = getTimezoneOffset('Africa/Cairo') // milliseconds
+    const localOffset = -new Date().getTimezoneOffset() * 60 * 1000 // milliseconds
+
+    const diff = Math.round(
+        (localOffset - egyptOffset) / (1000 * 60 * 60)
+    )
     if (!timeValue) return null
 
     // لو كان already full timestamp
     if (timeValue.includes('T') && timeValue.includes('-')) {
         const parsedDate = new Date(timeValue)
         if (!isNaN(parsedDate.getTime())) {
-            return parsedDate.toISOString()
+            // طرح 3 ساعات
+            const adjustedDate = subtractHours(parsedDate, 3)
+            return adjustedDate.toISOString()
         }
     }
 
@@ -29,26 +43,17 @@ function createTimestamp(dateStr: string, timeValue: string | null): string | nu
         timeOnly = timeValue.split('T')[1]
     }
 
-    // ✅ استخراج التاريخ والوقت
-    const [year, month, day] = dateStr.split('-').map(Number)
-    const [hours, minutes] = timeOnly.split(':').map(Number)
+    // إنشاء التاريخ
+    const fullDateTime = `${dateStr}T${timeOnly}:00`
+    const date = new Date(fullDateTime)
 
-    // ✅ إنشاء التاريخ كـ Local Time
-    const localDate = new Date(year, month - 1, day, hours, minutes, 0)
-
-    if (isNaN(localDate.getTime())) {
+    if (isNaN(date.getTime())) {
         return null
     }
 
-    // ✅ حساب فرق المنطقة الزمنية تلقائياً
-    // getTimezoneOffset() بترجع الفرق بالدقائق بين التوقيت المحلي و UTC
-    const timezoneOffset = -localDate.getTimezoneOffset() // بالساعات (مصر +3 أو +2)
-    const offsetMilliseconds = timezoneOffset * 60 * 1000 // تحويل إلى ملي ثانية
-
-    // ✅ تعديل التاريخ بناءً على فرق المنطقة الزمنية
-    const utcDate = new Date(localDate.getTime() - offsetMilliseconds)
-
-    return utcDate.toISOString()
+    // ✅ طرح 3 ساعات يدوياً
+    const adjustedDate = subtractHours(date, 3)
+    return adjustedDate.toISOString()
 }
 
 export async function GET(req: NextRequest) {
