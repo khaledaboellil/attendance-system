@@ -52,7 +52,7 @@ function createTimestamp(dateStr: string, timeValue: string | null): string | nu
     }
 
     // ✅ طرح 3 ساعات يدوياً
-    const adjustedDate = subtractHours(date, 3)
+    const adjustedDate = subtractHours(date, diff)
     return adjustedDate.toISOString()
 }
 
