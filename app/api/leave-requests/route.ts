@@ -124,12 +124,27 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        const allowedTypes = ['annual', 'sick', 'emergency', 'unpaid'];
-        if (!allowedTypes.includes(leave_type)) {
+        // ✅ دعم القيمتين (إنجليزي وعربي)
+        const allowedTypes = ['annual', 'sick', 'emergency', 'unpaid', 'سنوية', 'مرضية', 'عارضة', 'غير مدفوعة'];
+
+        // تحويل القيمة إلى إنجليزي إذا كانت عربية
+        let normalizedType = leave_type;
+        const typeMap: { [key: string]: string } = {
+            'سنوية': 'annual',
+            'مرضية': 'sick',
+            'عارضة': 'emergency',
+            'غير مدفوعة': 'unpaid'
+        };
+
+        if (typeMap[leave_type]) {
+            normalizedType = typeMap[leave_type];
+        }
+
+        if (!allowedTypes.includes(leave_type) && !allowedTypes.includes(normalizedType)) {
             return NextResponse.json({
                 error_ar: "نوع الإجازة غير مسموح به",
                 error_en: "Leave type not allowed"
-            }, { status: 400 });
+            }, { status: 400 })
         }
 
         const start = new Date(start_date)

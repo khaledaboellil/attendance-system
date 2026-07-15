@@ -3,8 +3,8 @@
     "",
     "\\app",
     "\\app\\api",
-    "\\app\\api\\attendance",
-    "\\app\\api\\attendance-correction"
+    "\\app\\api\\leave-requests"
   ],
+  "SelectedNode": "\\app\\api\\leave-requests\\route.ts",
   "PreviewInSolutionExplorer": false
 }
