@@ -489,8 +489,8 @@ export default function EmployeePage() {
     }
 
     const submitPermissionRequest = async () => {
-        if (!permissionDate || !permissionReason) {
-            alert(t('select_date_and_reason'))
+        if (!permissionDate ) {
+            alert(t('select_dates'))
             return
         }
 
@@ -511,7 +511,7 @@ export default function EmployeePage() {
                     date: permissionDate,
                     start_time: permissionStartTime || null,
                     end_time: permissionEndTime || null,
-                    reason: permissionReason
+                    reason: permissionReason || ''
                 })
             })
 
@@ -1600,7 +1600,7 @@ export default function EmployeePage() {
 
                 {/* Footer */}
                 <div style={styles.footer}>
-                    &copy; 2026 Khaled Aboellil. {t('footer')}
+                    &copy; 2026 Khaled Aboellil. 
                 </div>
             </div>
         </div>

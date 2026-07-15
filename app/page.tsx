@@ -176,7 +176,7 @@ export default function Login() {
                 {error && <p className="error">{error}</p>}
 
                 <div className="footer">
-                    &copy; 2026 Khaled Aboellil. {t('footer')}
+                    &copy; 2026 Khaled Aboellil.
                 </div>
             </div>
         </div>

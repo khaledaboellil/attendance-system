@@ -2859,7 +2859,7 @@ export default function AdminPage() {
                 )}
                 {/* Footer */}
                 <div style={styles.footer}>
-                    &copy; 2026 Khaled Aboellil. {t('footer')}
+                    &copy; 2026 Khaled Aboellil. 
                 </div>
             </div>
         </div>

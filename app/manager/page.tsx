@@ -621,8 +621,8 @@ export default function ManagerPage() {
     }
 
     const submitPermissionRequest = async () => {
-        if (!permissionDate || !permissionReason) {
-            alert(t('select_date_and_reason'))
+        if (!permissionDate) {
+            alert(t('select_date'))
             return
         }
 
@@ -643,7 +643,7 @@ export default function ManagerPage() {
                     date: permissionDate,
                     start_time: permissionStartTime || null,
                     end_time: permissionEndTime || null,
-                    reason: permissionReason
+                    reason: permissionReason||''
                 })
             })
 
@@ -2007,7 +2007,7 @@ export default function ManagerPage() {
 
                 {/* Footer */}
                 <div style={styles.footer}>
-                    &copy; 2026 Khaled Aboellil. {t('footer')}
+                    &copy; 2026 Khaled Aboellil.
                 </div>
             </div>
         </div>

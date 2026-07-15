@@ -1,12 +1,8 @@
 {
   "ExpandedNodes": [
     "",
-    "\\app",
-    "\\app\\admin",
-    "\\app\\employee",
-    "\\app\\manager",
-    "\\context"
+    "\\app"
   ],
-  "SelectedNode": "\\context\\LanguageContext.tsx",
+  "SelectedNode": "\\app\\page.tsx",
   "PreviewInSolutionExplorer": false
 }
