@@ -1,4 +1,5 @@
-﻿import { NextRequest, NextResponse } from "next/server"
+﻿// app/api/permission-requests/route.ts
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
@@ -8,7 +9,6 @@ const supabase = createClient(
 
 // Function to calculate month range based on system settings
 async function getMonthRange(referenceDate: Date) {
-    // Fetch system settings from database
     const { data: settings } = await supabase
         .from("system_settings")
         .select("month_start_day, month_end_day")
@@ -32,22 +32,23 @@ async function getMonthRange(referenceDate: Date) {
         endDate = new Date(year, month, endDay)
     }
 
-    const startStr = startDate.toISOString().split('T')[0]
-    const endStr = endDate.toISOString().split('T')[0]
-
-    console.log("📅 Month range calculation:", {
-        currentDate: referenceDate.toISOString().split('T')[0],
-        currentDay,
-        startDay,
-        endDay,
-        startDate: startStr,
-        endDate: endStr
-    })
-
     return {
-        start: startStr,
-        end: endStr
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0]
     }
+}
+
+// ✅ دالة لتحويل أنواع الإذن من العربية إلى الإنجليزية
+function normalizePermissionType(type: string): string {
+    const map: { [key: string]: string } = {
+        'ساعة': 'hour',
+        'ساعتين': 'two_hours',
+        'نصف يوم': 'half_day',
+        'hour': 'hour',
+        'two_hours': 'two_hours',
+        'half_day': 'half_day'
+    }
+    return map[type] || type
 }
 
 export async function GET(req: NextRequest) {
@@ -157,26 +158,34 @@ export async function POST(req: NextRequest) {
     try {
         const { employee_id, permission_type, date, start_time, end_time, reason } = await req.json()
 
-        if (!employee_id || !permission_type || !date || !reason) {
+        console.log("📥 Received:", { employee_id, permission_type, date, start_time, end_time, reason })
+
+        if (!employee_id || !permission_type || !date ) {
             return NextResponse.json({
                 error_ar: "جميع الحقول المطلوبة يجب إدخالها",
                 error_en: "All required fields must be filled"
             }, { status: 400 })
         }
 
-        if (!['hour', 'two_hours', 'half_day'].includes(permission_type)) {
+        // ✅ تحويل نوع الإذن إلى الإنجليزية
+        const normalizedType = normalizePermissionType(permission_type)
+        console.log("📝 Normalized permission type:", normalizedType)
+
+        // ✅ الأنواع المسموحة (ساعتين فقط + نصف يوم)
+        const allowedTypes = ['two_hours', 'half_day']
+        if (!allowedTypes.includes(normalizedType)) {
             return NextResponse.json({
-                error_ar: "نوع الإذن غير صحيح",
-                error_en: "Invalid permission type"
+                error_ar: `نوع الإذن غير مسموح به. الأنواع المسموحة: ساعتين، نصف يوم`,
+                error_en: `Permission type not allowed. Allowed types: two_hours, half_day`
             }, { status: 400 })
         }
 
         const requestDate = new Date(date)
         const monthRange = await getMonthRange(requestDate)
 
-        // Check monthly hour limit for hour or two_hours permissions
-        if (permission_type === "hour" || permission_type === "two_hours") {
-            // Fetch max hours per month setting
+        // ✅ التحقق من الحد الأقصى للساعات في الشهر (للساعتين فقط)
+        if (normalizedType === "two_hours") {
+            // جلب الحد الأقصى للساعات في الشهر
             const { data: settings } = await supabase
                 .from("system_settings")
                 .select("max_hours_per_month")
@@ -185,17 +194,17 @@ export async function POST(req: NextRequest) {
 
             const maxHoursPerMonth = settings?.max_hours_per_month || 2
 
-            // Fetch existing requests in current month
+            // ✅ جلب الطلبات في الشهر (المعلقة والمعتمدة فقط، مش المرفوضة)
             const { data: existingRequests, error: fetchError } = await supabase
                 .from("permission_requests")
-                .select("permission_type, deducted_from_leave")
+                .select("permission_type, deducted_from_leave, status")
                 .eq("employee_id", employee_id)
-                .in("status", ["approved", "pending"])
+                .in("status", ["approved", "pending"])  // ✅ فقط المعلقة والمعتمدة
                 .gte("date", monthRange.start)
                 .lte("date", monthRange.end)
 
-            console.log("📊 Checking month range:", monthRange);
-            console.log("📊 Existing requests in month:", existingRequests);
+            console.log("📊 Month range:", monthRange)
+            console.log("📊 Existing requests:", existingRequests)
 
             if (fetchError) {
                 return NextResponse.json({
@@ -204,15 +213,17 @@ export async function POST(req: NextRequest) {
                 }, { status: 500 })
             }
 
-            // Calculate total hours used in month
+            // ✅ حساب إجمالي الساعات المستخدمة في الشهر (ساعتين فقط)
             let totalHoursInMonth = 0
             existingRequests?.forEach(req => {
-                if (req.permission_type === "hour") totalHoursInMonth += 1
-                else if (req.permission_type === "two_hours") totalHoursInMonth += 2
+                if (req.permission_type === "two_hours") {
+                    totalHoursInMonth += 2
+                }
             })
 
-            const requestedHours = permission_type === "hour" ? 1 : 2
+            const requestedHours = 2
 
+            // ✅ التحقق من عدم تجاوز الحد الأقصى
             if (totalHoursInMonth + requestedHours > maxHoursPerMonth) {
                 const remainingHours = maxHoursPerMonth - totalHoursInMonth
                 return NextResponse.json({
@@ -220,23 +231,40 @@ export async function POST(req: NextRequest) {
                     error_en: `Cannot exceed ${maxHoursPerMonth} hours per month. Remaining: ${remainingHours} hours`
                 }, { status: 400 })
             }
+
+            // ✅ التحقق من وجود طلب pending لنفس اليوم (منع التكرار)
+            const { data: duplicateCheck } = await supabase
+                .from("permission_requests")
+                .select("id")
+                .eq("employee_id", employee_id)
+                .eq("permission_type", "two_hours")
+                .eq("date", date)
+                .eq("status", "pending")
+                .maybeSingle()
+
+            if (duplicateCheck) {
+                return NextResponse.json({
+                    error_ar: "لديك طلب ساعتين قيد الانتظار لنفس اليوم",
+                    error_en: "You already have a pending two-hours request for this date"
+                }, { status: 400 })
+            }
         }
 
-        // Check half-day permission (first one free per month)
+        // ✅ معالجة نصف اليوم
         let deductedFromLeave = false
-        if (permission_type === "half_day") {
-            // Fetch half-day requests in current month only
+        if (normalizedType === "half_day") {
+            // جلب طلبات نصف اليوم في الشهر الحالي
             const { data: halfDayRequests, error: halfDayError } = await supabase
                 .from("permission_requests")
-                .select("id, deducted_from_leave")
+                .select("id, deducted_from_leave, status")
                 .eq("employee_id", employee_id)
                 .eq("permission_type", "half_day")
                 .in("status", ["approved", "pending"])
                 .gte("date", monthRange.start)
                 .lte("date", monthRange.end)
 
-            console.log("📊 Half-day requests in current month:", halfDayRequests);
-            console.log("📅 Month range:", monthRange);
+            console.log("📊 Half-day requests in current month:", halfDayRequests)
+            console.log("📅 Month range:", monthRange)
 
             if (halfDayError) {
                 return NextResponse.json({
@@ -245,20 +273,18 @@ export async function POST(req: NextRequest) {
                 }, { status: 500 })
             }
 
-            // If has previous half-day request in same month
+            // إذا كان يوجد طلب سابق في نفس الشهر
             if (halfDayRequests && halfDayRequests.length > 0) {
                 const hasFreeHalfDay = halfDayRequests.some(req => !req.deducted_from_leave)
 
-                console.log("🔍 hasFreeHalfDay in current month:", hasFreeHalfDay);
-                console.log("📝 deducted_from_leave values in current month:", halfDayRequests.map(r => r.deducted_from_leave));
+                console.log("🔍 hasFreeHalfDay:", hasFreeHalfDay)
 
                 if (hasFreeHalfDay) {
-                    // This is second request in same month - will deduct from leave
+                    // الطلب الثاني في نفس الشهر - يخصم من الإجازات
                     deductedFromLeave = true
+                    console.log("💰 This is the second half-day request - will deduct from leave")
 
-                    console.log("💰 This is the second half-day request in the same month - will deduct from leave");
-
-                    // Check leave balance
+                    // التحقق من رصيد الإجازات
                     const { data: employee } = await supabase
                         .from("employees")
                         .select("current_year_leave_days, current_year_emergency_days")
@@ -266,31 +292,29 @@ export async function POST(req: NextRequest) {
                         .single()
 
                     if (employee) {
-                        if (employee.current_year_leave_days < 0.5) {
-                            if (employee.current_year_emergency_days < 0.5) {
-                                return NextResponse.json({
-                                    error_ar: "لا يوجد رصيد كافي في الإجازات لنصف يوم",
-                                    error_en: "Insufficient leave balance for half day"
-                                }, { status: 400 })
-                            }
+                        if (employee.current_year_leave_days < 0.5 && employee.current_year_emergency_days < 0.5) {
+                            return NextResponse.json({
+                                error_ar: "لا يوجد رصيد كافي في الإجازات لنصف يوم",
+                                error_en: "Insufficient leave balance for half day"
+                            }, { status: 400 })
                         }
                     }
                 } else {
-                    console.log("✅ First half-day request in this month - free");
+                    console.log("✅ First half-day request in this month - free")
                 }
             } else {
-                console.log("🎉 First half-day request in this month - free");
+                console.log("🎉 First half-day request in this month - free")
             }
         }
 
-        console.log("🚀 Submitting request with deductedFromLeave =", deductedFromLeave);
-        console.log("📅 Month range saved:", monthRange);
+        console.log("🚀 Submitting request with deductedFromLeave =", deductedFromLeave)
 
+        // ✅ إنشاء الطلب
         const { error } = await supabase
             .from("permission_requests")
             .insert([{
                 employee_id,
-                permission_type,
+                permission_type: normalizedType,
                 date,
                 start_time: start_time || null,
                 end_time: end_time || null,
@@ -311,10 +335,10 @@ export async function POST(req: NextRequest) {
         }
 
         let message_ar = "", message_en = ""
-        if (permission_type === "half_day" && deductedFromLeave) {
+        if (normalizedType === "half_day" && deductedFromLeave) {
             message_ar = "تم تقديم طلب الإذن (سيتم خصم نصف يوم من الإجازات)"
             message_en = "Permission request submitted (will be deducted from leave balance)"
-        } else if (permission_type === "half_day") {
+        } else if (normalizedType === "half_day") {
             message_ar = "تم تقديم طلب الإذن (نصف يوم مجاني)"
             message_en = "Permission request submitted (free half day)"
         } else {
@@ -324,7 +348,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ message_ar, message_en })
 
-    } catch {
+    } catch (error) {
+        console.error("POST error:", error)
         return NextResponse.json({
             error_ar: "حدث خطأ أثناء إنشاء الطلب",
             error_en: "Error creating request"
@@ -336,7 +361,7 @@ export async function PATCH(req: NextRequest) {
     try {
         const { id, action, approved_by, user_role, is_admin_as_manager } = await req.json()
 
-        console.log("🔍 PATCH received:", { id, action, approved_by, user_role, is_admin_as_manager });
+        console.log("🔍 PATCH received:", { id, action, approved_by, user_role, is_admin_as_manager })
 
         if (!id || !action || !approved_by || !user_role) {
             return NextResponse.json({
@@ -351,7 +376,7 @@ export async function PATCH(req: NextRequest) {
             .eq("id", id)
             .single()
 
-        console.log("📋 Request found:", request);
+        console.log("📋 Request found:", request)
 
         if (fetchError || !request) {
             return NextResponse.json({
@@ -392,21 +417,16 @@ export async function PATCH(req: NextRequest) {
         let updateData: any = { updated_at: new Date() }
 
         if (is_admin_as_manager && user_role === "hr") {
-            console.log("✅ Admin approving as manager");
+            console.log("✅ Admin approving as manager")
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
             updateData.status = "approved"
 
-            // If half-day permission with deduction from leave
+            // ✅ خصم نصف يوم إذا كان مطلوباً
             if (request.permission_type === "half_day" && request.deducted_from_leave) {
-                console.log("💰 Attempting to deduct 0.5 day from leave balance");
-                console.log("📊 Request details:", {
-                    permission_type: request.permission_type,
-                    deducted_from_leave: request.deducted_from_leave,
-                    employee_id: request.employee_id
-                });
+                console.log("💰 Attempting to deduct 0.5 day from leave balance")
 
                 const { data: employee, error: empError } = await supabase
                     .from("employees")
@@ -415,118 +435,133 @@ export async function PATCH(req: NextRequest) {
                     .single()
 
                 if (empError) {
-                    console.error("❌ Error fetching employee:", empError);
+                    console.error("❌ Error fetching employee:", empError)
                 } else if (employee) {
-                    if (employee.current_year_leave_days > 0.5) {
-                        const newUsedDays = (employee.current_year_leave_days) - 0.5
+                    if (employee.current_year_leave_days >= 0.5) {
+                        const newBalance = (employee.current_year_leave_days) - 0.5
                         const { error: updateError } = await supabase
                             .from("employees")
-                            .update({ current_year_leave_days: newUsedDays })
+                            .update({ current_year_leave_days: newBalance })
                             .eq("id", request.employee_id)
 
                         if (updateError) {
-                            console.error("❌ Error updating leave balance:", updateError);
+                            console.error("❌ Error updating leave balance:", updateError)
                         } else {
-                            console.log("✅ Leave balance updated successfully");
+                            console.log("✅ Leave balance updated successfully")
                         }
-                    }
-                    else {
-                        const newUsedDays = (employee.current_year_emergency_days) - 0.5
+                    } else if (employee.current_year_emergency_days >= 0.5) {
+                        const newBalance = (employee.current_year_emergency_days) - 0.5
                         const { error: updateError } = await supabase
                             .from("employees")
-                            .update({ current_year_emergency_days: newUsedDays })
+                            .update({ current_year_emergency_days: newBalance })
                             .eq("id", request.employee_id)
 
                         if (updateError) {
-                            console.error("❌ Error updating leave balance:", updateError);
+                            console.error("❌ Error updating emergency balance:", updateError)
                         } else {
-                            console.log("✅ Leave balance updated successfully");
+                            console.log("✅ Emergency balance updated successfully")
                         }
+                    } else {
+                        console.error("❌ Insufficient balance for deduction")
                     }
                 }
             }
         }
         else if (user_role === "hr") {
-            console.log("✅ HR approving");
+            console.log("✅ HR approving")
             updateData.hr_approved = true
             updateData.hr_approved_by = approved_by
 
             if (request.manager_approved) {
                 updateData.status = "approved"
 
-                // If half-day permission with deduction from leave
+                // ✅ خصم نصف يوم إذا كان مطلوباً
                 if (request.permission_type === "half_day" && request.deducted_from_leave) {
-                    console.log("💰 Attempting to deduct 0.5 day from leave balance");
-                    console.log("📊 Request details:", {
-                        permission_type: request.permission_type,
-                        deducted_from_leave: request.deducted_from_leave,
-                        employee_id: request.employee_id
-                    });
+                    console.log("💰 Attempting to deduct 0.5 day from leave balance")
 
                     const { data: employee, error: empError } = await supabase
                         .from("employees")
-                        .select("used_leave_days")
+                        .select("current_year_leave_days, current_year_emergency_days")
                         .eq("id", request.employee_id)
                         .single()
 
                     if (empError) {
-                        console.error("❌ Error fetching employee:", empError);
+                        console.error("❌ Error fetching employee:", empError)
                     } else if (employee) {
-                        const newUsedDays = (employee.used_leave_days || 0) + 0.5
-                        console.log(`📊 Old balance: ${employee.used_leave_days}, New balance: ${newUsedDays}`);
+                        if (employee.current_year_leave_days >= 0.5) {
+                            const newBalance = (employee.current_year_leave_days) - 0.5
+                            const { error: updateError } = await supabase
+                                .from("employees")
+                                .update({ current_year_leave_days: newBalance })
+                                .eq("id", request.employee_id)
 
-                        const { error: updateError } = await supabase
-                            .from("employees")
-                            .update({ used_leave_days: newUsedDays })
-                            .eq("id", request.employee_id)
+                            if (updateError) {
+                                console.error("❌ Error updating leave balance:", updateError)
+                            } else {
+                                console.log("✅ Leave balance updated successfully")
+                            }
+                        } else if (employee.current_year_emergency_days >= 0.5) {
+                            const newBalance = (employee.current_year_emergency_days) - 0.5
+                            const { error: updateError } = await supabase
+                                .from("employees")
+                                .update({ current_year_emergency_days: newBalance })
+                                .eq("id", request.employee_id)
 
-                        if (updateError) {
-                            console.error("❌ Error updating leave balance:", updateError);
-                        } else {
-                            console.log("✅ Leave balance updated successfully");
+                            if (updateError) {
+                                console.error("❌ Error updating emergency balance:", updateError)
+                            } else {
+                                console.log("✅ Emergency balance updated successfully")
+                            }
                         }
                     }
                 }
             }
         }
         else if (user_role === "manager") {
-            console.log("✅ Manager approving");
+            console.log("✅ Manager approving")
             updateData.manager_approved = true
             updateData.manager_approved_by = approved_by
 
             if (request.hr_approved) {
                 updateData.status = "approved"
 
-                // If half-day permission with deduction from leave
+                // ✅ خصم نصف يوم إذا كان مطلوباً
                 if (request.permission_type === "half_day" && request.deducted_from_leave) {
-                    console.log("💰 Attempting to deduct 0.5 day from leave balance");
-                    console.log("📊 Request details:", {
-                        permission_type: request.permission_type,
-                        deducted_from_leave: request.deducted_from_leave,
-                        employee_id: request.employee_id
-                    });
+                    console.log("💰 Attempting to deduct 0.5 day from leave balance")
 
                     const { data: employee, error: empError } = await supabase
                         .from("employees")
-                        .select("used_leave_days")
+                        .select("current_year_leave_days, current_year_emergency_days")
                         .eq("id", request.employee_id)
                         .single()
 
                     if (empError) {
-                        console.error("❌ Error fetching employee:", empError);
+                        console.error("❌ Error fetching employee:", empError)
                     } else if (employee) {
-                        const newUsedDays = (employee.used_leave_days || 0) + 0.5
-                        console.log(`📊 Old balance: ${employee.used_leave_days}, New balance: ${newUsedDays}`);
+                        if (employee.current_year_leave_days >= 0.5) {
+                            const newBalance = (employee.current_year_leave_days) - 0.5
+                            const { error: updateError } = await supabase
+                                .from("employees")
+                                .update({ current_year_leave_days: newBalance })
+                                .eq("id", request.employee_id)
 
-                        const { error: updateError } = await supabase
-                            .from("employees")
-                            .update({ used_leave_days: newUsedDays })
-                            .eq("id", request.employee_id)
+                            if (updateError) {
+                                console.error("❌ Error updating leave balance:", updateError)
+                            } else {
+                                console.log("✅ Leave balance updated successfully")
+                            }
+                        } else if (employee.current_year_emergency_days >= 0.5) {
+                            const newBalance = (employee.current_year_emergency_days) - 0.5
+                            const { error: updateError } = await supabase
+                                .from("employees")
+                                .update({ current_year_emergency_days: newBalance })
+                                .eq("id", request.employee_id)
 
-                        if (updateError) {
-                            console.error("❌ Error updating leave balance:", updateError);
-                        } else {
-                            console.log("✅ Leave balance updated successfully");
+                            if (updateError) {
+                                console.error("❌ Error updating emergency balance:", updateError)
+                            } else {
+                                console.log("✅ Emergency balance updated successfully")
+                            }
                         }
                     }
                 }
@@ -600,7 +635,7 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ message_ar, message_en })
 
     } catch (error) {
-        console.error("❌ Error in PATCH:", error);
+        console.error("❌ Error in PATCH:", error)
         return NextResponse.json({
             error_ar: "حدث خطأ أثناء تحديث الطلب",
             error_en: "Error updating request"

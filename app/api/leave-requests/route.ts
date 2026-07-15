@@ -1,10 +1,26 @@
-﻿import { NextRequest, NextResponse } from "next/server"
+﻿// app/api/leave-requests/route.ts
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+// ✅ دالة لتحويل أنواع الإجازات من العربية إلى الإنجليزية
+function normalizeLeaveType(type: string): string {
+    const map: { [key: string]: string } = {
+        'سنوية': 'annual',
+        'مرضية': 'sick',
+        'عارضة': 'emergency',
+        'غير مدفوعة': 'unpaid',
+        'annual': 'annual',
+        'sick': 'sick',
+        'emergency': 'emergency',
+        'unpaid': 'unpaid'
+    }
+    return map[type] || type
+}
 
 export async function GET(req: NextRequest) {
     try {
@@ -117,6 +133,8 @@ export async function POST(req: NextRequest) {
     try {
         const { employee_id, leave_type, start_date, end_date, reason } = await req.json()
 
+        console.log("📥 Received leave request:", { employee_id, leave_type, start_date, end_date, reason })
+
         if (!employee_id || !leave_type || !start_date || !end_date) {
             return NextResponse.json({
                 error_ar: "جميع الحقول المطلوبة يجب إدخالها",
@@ -124,26 +142,15 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // ✅ دعم القيمتين (إنجليزي وعربي)
-        const allowedTypes = ['annual', 'sick', 'emergency', 'unpaid', 'سنوية', 'مرضية', 'عارضة', 'غير مدفوعة'];
+        // ✅ تحويل نوع الإجازة إلى الإنجليزية
+        const normalizedType = normalizeLeaveType(leave_type)
+        console.log("📝 Normalized leave type:", normalizedType)
 
-        // تحويل القيمة إلى إنجليزي إذا كانت عربية
-        let normalizedType = leave_type;
-        const typeMap: { [key: string]: string } = {
-            'سنوية': 'annual',
-            'مرضية': 'sick',
-            'عارضة': 'emergency',
-            'غير مدفوعة': 'unpaid'
-        };
-
-        if (typeMap[leave_type]) {
-            normalizedType = typeMap[leave_type];
-        }
-
-        if (!allowedTypes.includes(leave_type) && !allowedTypes.includes(normalizedType)) {
+        const allowedTypes = ['annual', 'sick', 'emergency', 'unpaid']
+        if (!allowedTypes.includes(normalizedType)) {
             return NextResponse.json({
-                error_ar: "نوع الإجازة غير مسموح به",
-                error_en: "Leave type not allowed"
+                error_ar: `نوع الإجازة غير مسموح به: ${leave_type}`,
+                error_en: `Leave type not allowed: ${leave_type}`
             }, { status: 400 })
         }
 
@@ -151,7 +158,7 @@ export async function POST(req: NextRequest) {
         const end = new Date(end_date)
         const requestedDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-        // Fetch employee data
+        // جلب بيانات الموظف
         const { data: employee, error: empError } = await supabase
             .from("employees")
             .select("current_year_leave_days, current_year_emergency_days")
@@ -165,7 +172,7 @@ export async function POST(req: NextRequest) {
             }, { status: 500 })
         }
 
-        // Fetch previous requests for the current year
+        // جلب الطلبات السابقة للسنة الحالية
         const currentYear = new Date().getFullYear()
         const yearStart = `${currentYear}-01-01`
         const yearEnd = `${currentYear}-12-31`
@@ -177,11 +184,12 @@ export async function POST(req: NextRequest) {
             .gte("start_date", yearStart)
             .lte("end_date", yearEnd)
 
-        if (leave_type === "annual") {
-            // Calculate used annual leave from requests (pending + approved)
+        // ✅ حساب الرصيد المستخدم من الطلبات المعتمدة فقط (approved)
+        if (normalizedType === "annual") {
             let usedAnnual = 0
             allRequests?.forEach(req => {
-                if (req.leave_type === "annual" && req.status !== "rejected") {
+                // ✅ فقط المعتمدة
+                if (req.leave_type === "annual" && req.status === "pending") {
                     const s = new Date(req.start_date)
                     const e = new Date(req.end_date)
                     const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -192,18 +200,20 @@ export async function POST(req: NextRequest) {
             const total = employee.current_year_leave_days
             const remaining = total - usedAnnual
 
+            console.log(`📊 Annual: Total=${total}, Used=${usedAnnual}, Remaining=${remaining}, Requested=${requestedDays}`)
+
             if (requestedDays > remaining) {
                 return NextResponse.json({
-                    error_ar: `لا يوجد رصيد كافٍ. رصيدك المتبقي: ${remaining} يوم (بما في ذلك الطلبات المعلقة)`,
-                    error_en: `Insufficient balance. Your remaining balance: ${remaining} days (including pending requests)`
+                    error_ar: `لا يوجد رصيد كافٍ. رصيدك المتبقي: ${remaining} يوم بما فى ذلك المتعلق `,
+                    error_en: `Insufficient balance. Your remaining balance: ${remaining} days including pending days`
                 }, { status: 400 })
             }
         }
-        else if (leave_type === "emergency") {
-            // Calculate used emergency leave from requests (pending + approved)
+        else if (normalizedType === "emergency") {
             let usedEmergency = 0
             allRequests?.forEach(req => {
-                if (req.leave_type === "emergency" && req.status !== "rejected") {
+                // ✅ فقط المعتمدة
+                if (req.leave_type === "emergency" && req.status === "approved") {
                     const s = new Date(req.start_date)
                     const e = new Date(req.end_date)
                     const days = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -214,15 +224,17 @@ export async function POST(req: NextRequest) {
             const emergencyTotal = employee.current_year_emergency_days
             const remainingEmergency = emergencyTotal - usedEmergency
 
+            console.log(`📊 Emergency: Total=${emergencyTotal}, Used=${usedEmergency}, Remaining=${remainingEmergency}, Requested=${requestedDays}`)
+
             if (requestedDays > remainingEmergency) {
                 return NextResponse.json({
-                    error_ar: `لا يوجد رصيد إجازات عارضة كافٍ. المتبقي: ${remainingEmergency} يوم (بما في ذلك الطلبات المعلقة)`,
-                    error_en: `Insufficient emergency leave balance. Remaining: ${remainingEmergency} days (including pending requests)`
+                    error_ar: `لا يوجد رصيد إجازات عارضة كافٍ. المتبقي: ${remainingEmergency} يوم`,
+                    error_en: `Insufficient emergency leave balance. Remaining: ${remainingEmergency} days`
                 }, { status: 400 })
             }
         }
 
-        // Check for duplicate pending request in the same period
+        // ✅ التحقق من وجود طلب مكرر في نفس الفترة (للمعلقة فقط)
         const { data: existing, error: existingError } = await supabase
             .from("leave_requests")
             .select("*")
@@ -237,21 +249,22 @@ export async function POST(req: NextRequest) {
             }, { status: 400 })
         }
 
-        // Create the new request
+        // ✅ إنشاء الطلب الجديد
         const { error } = await supabase
             .from("leave_requests")
             .insert([{
                 employee_id,
-                leave_type,
+                leave_type: normalizedType,
                 start_date,
                 end_date,
-                reason,
+                reason: reason || null,
                 hr_approved: false,
                 manager_approved: false,
                 status: "pending"
             }])
 
         if (error) {
+            console.error("Error inserting leave request:", error)
             return NextResponse.json({
                 error_ar: error.message,
                 error_en: error.message
@@ -332,7 +345,7 @@ export async function PATCH(req: NextRequest) {
             })
         }
 
-        // Calculate number of days
+        // حساب عدد الأيام
         const start = new Date(request.start_date)
         const end = new Date(request.end_date)
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -346,7 +359,7 @@ export async function PATCH(req: NextRequest) {
             updateData.manager_approved_by = approved_by
             updateData.status = "approved"
 
-            // Update employee balance
+            // تحديث رصيد الموظف
             if (request.leave_type === "annual") {
                 const { data: employee, error: empError } = await supabase
                     .from("employees")
@@ -404,7 +417,7 @@ export async function PATCH(req: NextRequest) {
             if (request.manager_approved) {
                 updateData.status = "approved"
 
-                // Update employee balance
+                // تحديث رصيد الموظف
                 if (request.leave_type === "annual") {
                     const { data: employee, error: empError } = await supabase
                         .from("employees")
@@ -447,7 +460,7 @@ export async function PATCH(req: NextRequest) {
             if (request.hr_approved) {
                 updateData.status = "approved"
 
-                // Update employee balance
+                // تحديث رصيد الموظف
                 if (request.leave_type === "annual") {
                     const { data: employee, error: empError } = await supabase
                         .from("employees")

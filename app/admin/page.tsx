@@ -195,7 +195,7 @@ export default function AdminPage() {
     // ==================== Permission Requests ====================
     const [permissionRequests, setPermissionRequests] = useState<any[]>([])
     const [showPermissionForm, setShowPermissionForm] = useState(false)
-    const [permissionType, setPermissionType] = useState("ساعة")
+    const [permissionType, setPermissionType] = useState("two_hours")
     const [permissionDate, setPermissionDate] = useState("")
     const [permissionStartTime, setPermissionStartTime] = useState("")
     const [permissionEndTime, setPermissionEndTime] = useState("")
@@ -380,6 +380,39 @@ export default function AdminPage() {
         }
     }, [])
 
+
+
+    // =============================================
+    // useEffect for Active tabs
+    // =============================================
+
+    useEffect(() => {
+        // تحديث البيانات حسب التاب النشط
+        if (activeTab === "employees") {
+            fetchEmployees()
+            fetchDepartments()
+        } else if (activeTab === "allRequests") {
+            fetchAllRequests()
+        } else if (activeTab === "leave") {
+            fetchLeaveRequests(adminId)
+            fetchLeaveBalance(adminId)
+        } else if (activeTab === "overtime") {
+            fetchOvertimeRequests(adminId)
+        } else if (activeTab === "permission") {
+            fetchPermissionRequests(adminId)
+        } else if (activeTab === "correction") {
+            fetchCorrectionRequests(adminId)
+        } else if (activeTab === "attendance") {
+            fetchTodayAttendance(adminUsername)
+        } else if (activeTab === "departments") {
+            fetchDepartments()
+        } else if (activeTab === "reports") {
+            // لا نحتاج تحديث تلقائي للتقرير
+        } else if (activeTab === "dashboard") {
+            fetchEmployees()
+            fetchDepartments()
+        }
+    }, [activeTab]) // ✅ يتشغل كلما تغير التاب
     // =============================================
     // Fetch Functions
     // =============================================
@@ -753,7 +786,7 @@ export default function AdminPage() {
             return
         }
 
-        if ((permissionType === "hour" || permissionType === "two_hours") && !permissionStartTime) {
+        if ((permissionType === "two_hours") && !permissionStartTime) {
             alert(t('select_start_time'))
             return
         }
@@ -811,7 +844,7 @@ export default function AdminPage() {
     }
 
     const submitCorrectionRequest = async () => {
-        if (!correctionDate) return showMessage({ message: t('select_date_and_reason') }, false)
+        if (!correctionDate) return showMessage({ message: t('select_dates') }, false)
 
         const res = await fetch("/api/attendance-correction", {
             method: "POST",
@@ -821,7 +854,7 @@ export default function AdminPage() {
                 date: correctionDate,
                 expected_check_in: correctionCheckIn || null,
                 expected_check_out: correctionCheckOut || null,
-                reason: correctionReason
+                reason: correctionReason || ""
             })
         })
 
@@ -2439,7 +2472,7 @@ export default function AdminPage() {
                                 <h4 style={styles.formTitle}>{t('new_permission_request')}</h4>
 
                                 <select value={permissionType} onChange={e => setPermissionType(e.target.value)} style={styles.select}>
-                                    <option value="hour">{t('one_hour')}</option>
+                              
                                     <option value="two_hours">{t('two_hours')}</option>
                                     <option value="half_day">{t('half_day')}</option>
                                 </select>
@@ -2449,7 +2482,7 @@ export default function AdminPage() {
                                     <input type="date" value={permissionDate} onChange={e => setPermissionDate(e.target.value)} style={styles.dateInput} />
                                 </div>
 
-                                {(permissionType === "hour" || permissionType === "two_hours") && (
+                                {(permissionType === "two_hours") && (
                                     <div style={styles.timeField}>
                                         <label style={styles.label}>{t('start_time')}:</label>
                                         <input type="time" value={permissionStartTime} onChange={e => setPermissionStartTime(e.target.value)} style={styles.input} />

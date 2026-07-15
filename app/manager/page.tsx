@@ -159,7 +159,7 @@ export default function ManagerPage() {
 
     const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([])
     const [showPermissionForm, setShowPermissionForm] = useState(false)
-    const [permissionType, setPermissionType] = useState("hour")
+    const [permissionType, setPermissionType] = useState("two_hours")
     const [permissionDate, setPermissionDate] = useState("")
     const [permissionStartTime, setPermissionStartTime] = useState("")
     const [permissionEndTime, setPermissionEndTime] = useState("")
@@ -263,6 +263,34 @@ export default function ManagerPage() {
         }
     }, [])
 
+
+
+    // =============================================
+    // useEffect for active tabs
+    // =============================================
+
+    useEffect(() => {
+        // تحديث البيانات حسب التاب النشط
+        if (activeTab === "requests") {
+            if (managedDepts.length > 0) {
+                fetchAllRequests(managedDepts, filter)
+            }
+        } else if (activeTab === "attendance") {
+            fetchTodayAttendance(managerUsername)
+        } else if (activeTab === "leave") {
+            fetchLeaveRequests(managerId)
+            fetchLeaveBalance(managerId)
+        } else if (activeTab === "overtime") {
+            fetchOvertimeRequests(managerId)
+        } else if (activeTab === "permission") {
+            fetchPermissionRequests(managerId)
+            fetchPermissionStats(managerId)
+        } else if (activeTab === "correction") {
+            fetchCorrectionRequests(managerId)
+        } else if (activeTab === "settings") {
+            // لا نحتاج تحديث
+        }
+    }, [activeTab]) // ✅ يتشغل كلما تغير التاب
     // =============================================
     // Fetch Functions
     // =============================================
@@ -598,7 +626,7 @@ export default function ManagerPage() {
             return
         }
 
-        if ((permissionType === "hour" || permissionType === "two_hours") && !permissionStartTime) {
+        if ((permissionType === "two_hours") && !permissionStartTime) {
             alert(t('select_start_time'))
             return
         }
@@ -673,8 +701,8 @@ export default function ManagerPage() {
     }
 
     const submitCorrectionRequest = async () => {
-        if (!correctionDate || !correctionReason) {
-            alert(t('select_date_and_reason'))
+        if (!correctionDate) {
+            alert(t('select_dates'))
             return
         }
 
@@ -686,7 +714,7 @@ export default function ManagerPage() {
                 date: correctionDate,
                 expected_check_in: correctionCheckIn || null,
                 expected_check_out: correctionCheckOut || null,
-                reason: correctionReason
+                reason: correctionReason || ""
             })
         })
 
@@ -1586,7 +1614,7 @@ export default function ManagerPage() {
                                     onChange={e => setPermissionType(e.target.value)}
                                     style={styles.select}
                                 >
-                                    <option value="hour">{t('one_hour')}</option>
+                                    
                                     <option value="two_hours">{t('two_hours')}</option>
                                     <option value="half_day">{t('half_day')}</option>
                                 </select>
@@ -1601,7 +1629,7 @@ export default function ManagerPage() {
                                     />
                                 </div>
 
-                                {(permissionType === "hour" || permissionType === "two_hours") && (
+                                {(permissionType === "two_hours") && (
                                     <div style={styles.timeField}>
                                         <label style={styles.label}>{t('start_time')}:</label>
                                         <input
@@ -1800,7 +1828,7 @@ export default function ManagerPage() {
                                 </div>
 
                                 <textarea
-                                    placeholder={t('reason_required')}
+                                    placeholder={t('reason')}
                                     value={correctionReason}
                                     onChange={e => setCorrectionReason(e.target.value)}
                                     style={styles.textarea}
