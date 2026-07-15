@@ -1,8 +1,10 @@
 {
   "ExpandedNodes": [
     "",
-    "\\app"
+    "\\app",
+    "\\components",
+    "\\context"
   ],
-  "SelectedNode": "\\app\\page.tsx",
+  "SelectedNode": "\\components\\LanguageSwitcher.tsx",
   "PreviewInSolutionExplorer": false
 }

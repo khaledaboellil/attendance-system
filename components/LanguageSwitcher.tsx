@@ -22,7 +22,7 @@ export default function LanguageSwitcher() {
                 gap: 4
             }}
         >
-            <span>{language === 'ar' ? '🇺🇸' : '🇸🇦'}</span>
+            <span>{language === 'ar' ? '🇺🇸' : 'EG'}</span>
             {language === 'ar' ? 'English' : 'العربية'}
         </button>
     )
